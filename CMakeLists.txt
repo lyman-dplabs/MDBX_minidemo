@@ -21,6 +21,36 @@ if(PKG_CONFIG_FOUND)
     pkg_check_modules(MDBX libmdbx)
 endif()
 
+# 引入 CPM.cmake
+include(cmake/CPM.cmake/cmake/CPM.cmake)
+
+# RocksDB / Boost / OpenSSL 通过 vcpkg.json 管理
+# 这里不用手写 find_package，vcpkg 会自动集成
+
+# MDBX 使用 CPM 拉源码编译
+CPMAddPackage(
+  NAME libmdbx
+  GITHUB_REPOSITORY erthink/libmdbx
+  VERSION 0.12.8
+  OPTIONS 
+    "MDBX_BUILD_SHARED_LIBS OFF" 
+    "MDBX_BUILD_TOOLS OFF"
+    "MDBX_ENABLE_TESTING OFF"
+    "MDBX_ENABLE_EXAMPLES OFF"
+    "MDBX_ENABLE_PROGRAMS OFF"
+)
+
+# 设置 MDBX 为已找到
+if(libmdbx_ADDED)
+    set(MDBX_FOUND TRUE)
+    set(MDBX_LIBRARIES libmdbx)
+    set(MDBX_INCLUDE_DIRS ${libmdbx_SOURCE_DIR})
+    message(STATUS "MDBX found via CPM: ${libmdbx_SOURCE_DIR}")
+    message(STATUS "MDBX build dir: ${libmdbx_BINARY_DIR}")
+else()
+    message(WARNING "Failed to add MDBX via CPM")
+endif()
+
 if(NOT MDBX_FOUND)
     # Try system installation
     find_path(MDBX_INCLUDE_DIR mdbx.h++)
@@ -72,8 +102,9 @@ target_link_libraries(core_logic PUBLIC
 # Add MDBX if found
 if(MDBX_FOUND)
     target_include_directories(core_logic PUBLIC ${MDBX_INCLUDE_DIRS})
-    target_link_libraries(core_logic PUBLIC ${MDBX_LIBRARIES})
+    target_link_libraries(core_logic PUBLIC ${libmdbx_BINARY_DIR}/libmdbx.a)
     target_compile_definitions(core_logic PUBLIC HAVE_MDBX=1)
+    message(STATUS "MDBX linked to core_logic")
 else()
     message(WARNING "MDBX not found, MDBX functionality will be disabled")
     target_compile_definitions(core_logic PUBLIC HAVE_MDBX=0)
@@ -96,6 +127,25 @@ target_link_libraries(benchmark_runner PRIVATE
     core_logic
     benchmark::benchmark_main # google benchmark provides a main function
 )
+
+# --- Test Executables ---
+# Endian test
+add_executable(test_endian test_endian.cpp)
+target_include_directories(test_endian PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_endian PRIVATE fmt::fmt)
+
+# RocksDB test
+add_executable(test_rocksdb test_rocksdb.cpp)
+target_include_directories(test_rocksdb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(test_rocksdb PRIVATE core_logic)
+
+# Simple MDBX test
+if(MDBX_FOUND)
+    add_executable(test_mdbx_simple test_mdbx_simple.cpp)
+    target_include_directories(test_mdbx_simple PRIVATE ${MDBX_INCLUDE_DIRS})
+    target_link_libraries(test_mdbx_simple PRIVATE ${libmdbx_BINARY_DIR}/libmdbx.a)
+    target_compile_definitions(test_mdbx_simple PRIVATE HAVE_MDBX=1)
+endif()
 
 # --- Installation Rules (Optional) ---
 install(TARGETS mdbx_demo benchmark_runner

@@ -387,6 +387,9 @@ run_tests() {
     if [[ -x "${BUILD_DIR}/test_rocksdb" ]]; then
         test_files+=("${BUILD_DIR}/test_rocksdb")
     fi
+    if [[ -x "${BUILD_DIR}/test_mdbx_simple" ]]; then
+        test_files+=("${BUILD_DIR}/test_mdbx_simple")
+    fi
     
     if [[ ${#test_files[@]} -eq 0 ]]; then
         log_warning "No test executables found"

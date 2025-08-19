@@ -22,12 +22,18 @@ MdbxImpl::MdbxImpl(const std::filesystem::path& db_path) : pimpl_{std::make_uniq
             std::filesystem::create_directories(db_path);
         }
 
-        mdbx::env::create env_creator;
-        env_creator.set_geometry(mdbx::geometry::from_gib(1)); // 1 GiB initial size
-        env_creator.set_max_dbs(16); // Max 16 DBI
-        pimpl_->env = env_creator.open(db_path.string().c_str());
+        // 创建环境参数
+        mdbx::env_managed::create_parameters create_params;
+        create_params.geometry.make_dynamic(1 * mdbx::env::geometry::GiB); // 1 GiB initial size
+        
+        // 操作参数
+        mdbx::env_managed::operate_parameters operate_params;
+        operate_params.max_maps = 16; // Max 16 DBI
+        
+        // 创建环境
+        pimpl_->env = mdbx::env_managed(db_path.string(), create_params, operate_params);
 
-        auto txn = pimpl_->env.write_txn();
+        auto txn = pimpl_->env.start_write();
         pimpl_->dbi = txn.create_map("AccountState", mdbx::key_mode::usual, mdbx::value_mode::single);
         txn.commit();
 
@@ -41,15 +47,15 @@ MdbxImpl::~MdbxImpl() = default; // Needed for the unique_ptr to a forward-decla
 
 // --- Public Methods ---
 void MdbxImpl::put(std::span<const std::byte> key, std::span<const std::byte> value) {
-    auto txn = pimpl_->env.write_txn();
+    auto txn = pimpl_->env.start_write();
     auto cursor = txn.open_cursor(pimpl_->dbi);
-    cursor.put({key.data(), key.size()}, {value.data(), value.size()}, mdbx::upsert_flags::in_separate_pages);
+    cursor.upsert({key.data(), key.size()}, {value.data(), value.size()});
     txn.commit();
 }
 
 auto MdbxImpl::get_state(std::string_view account_name, std::uint64_t block_number)
     -> std::optional<std::vector<std::byte>> {
-    auto txn = pimpl_->env.read_txn();
+    auto txn = pimpl_->env.start_read();
     auto cursor = txn.open_cursor(pimpl_->dbi);
 
     // 1. Construct the seek key: account_name + big_endian(block_number + 1)
