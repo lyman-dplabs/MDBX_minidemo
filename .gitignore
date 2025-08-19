@@ -1,0 +1,15 @@
+.cache
+# Build artifacts
+build/
+/build/
+
+# IDE settings
+.vscode/
+.idea/
+
+# vcpkg
+/vcpkg_installed/
+
+# OS-specific
+.DS_Store
+Thumbs.db
