@@ -31,7 +31,7 @@ include(cmake/CPM.cmake)
 CPMAddPackage(
   NAME libmdbx
   GITHUB_REPOSITORY erthink/libmdbx
-  VERSION 0.12.8
+  VERSION 0.14.1
   OPTIONS 
     "MDBX_BUILD_SHARED_LIBS OFF" 
     "MDBX_BUILD_TOOLS OFF"
