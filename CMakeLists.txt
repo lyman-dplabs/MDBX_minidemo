@@ -102,7 +102,7 @@ target_link_libraries(core_logic PUBLIC
 # Add MDBX if found
 if(MDBX_FOUND)
     target_include_directories(core_logic PUBLIC ${MDBX_INCLUDE_DIRS})
-    target_link_libraries(core_logic PUBLIC ${libmdbx_BINARY_DIR}/libmdbx.a)
+    target_link_libraries(core_logic PUBLIC mdbx-static)
     target_compile_definitions(core_logic PUBLIC HAVE_MDBX=1)
     message(STATUS "MDBX linked to core_logic")
 else()
@@ -143,7 +143,7 @@ target_link_libraries(test_rocksdb PRIVATE core_logic)
 if(MDBX_FOUND)
     add_executable(test_mdbx_simple test_mdbx_simple.cpp)
     target_include_directories(test_mdbx_simple PRIVATE ${MDBX_INCLUDE_DIRS})
-    target_link_libraries(test_mdbx_simple PRIVATE ${libmdbx_BINARY_DIR}/libmdbx.a)
+    target_link_libraries(test_mdbx_simple PRIVATE mdbx-static)
     target_compile_definitions(test_mdbx_simple PRIVATE HAVE_MDBX=1)
 endif()
 

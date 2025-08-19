@@ -293,7 +293,7 @@ configure_build() {
     if [[ "${VERBOSE}" == "true" ]]; then
         cmake "${cmake_args[@]}" "${PROJECT_ROOT}"
     else
-        cmake "${cmake_args[@]}" "${PROJECT_ROOT}" > /dev/null
+        cmake "${cmake_args[@]}" "${PROJECT_ROOT}"
     fi
     
     cd "${PROJECT_ROOT}"
