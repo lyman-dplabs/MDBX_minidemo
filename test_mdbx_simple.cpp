@@ -18,7 +18,8 @@ int main() {
         
         // 创建数据库
         auto txn = env.start_write();
-        auto dbi = txn.create_map("test", mdbx::key_mode::usual, mdbx::value_mode::single);
+        // mdbx::value_mode::multi would enable MDBX_DUPSORT
+        auto dbi = txn.create_map("test", mdbx::key_mode::usual, mdbx::value_mode::multi);
         
         // 插入数据
         std::string key1 = "Vitalik";
@@ -48,8 +49,8 @@ int main() {
             std::cout << "No data found for first key " << key1 << std::endl;
         }
         
-        // 查找特定键
-        result = cursor.find({key1.data(), key1.size()});
+        // 查找特定键. 使用MDBX_PREV_DUP
+        result = cursor.move(mdbx::cursor::multi_currentkey_prevvalue, true);
         if (result.done) {
             std::string found_value(reinterpret_cast<const char*>(result.value.data()), result.value.size());
             std::cout << "Found key1: " << found_value << std::endl;
