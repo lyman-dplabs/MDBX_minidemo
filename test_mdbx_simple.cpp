@@ -21,14 +21,17 @@ int main() {
         auto dbi = txn.create_map("test", mdbx::key_mode::usual, mdbx::value_mode::single);
         
         // 插入数据
-        std::string key1 = "key1";
-        std::string value1 = "value1";
+        std::string key1 = "Vitalik";
+        std::string value1 = "Buterin";
+        std::cout << "Inserting key1: " << key1 << " with value: " << value1 << std::endl;
         txn.upsert(dbi, {key1.data(), key1.size()}, {value1.data(), value1.size()});
         
-        std::string key2 = "key2";
-        std::string value2 = "value2";
+        std::string key2 = "Satoshi";
+        std::string value2 = "Nakamoto";
+        std::cout << "Inserting key2: " << key2 << " with value: " << value2 << std::endl;
         txn.upsert(dbi, {key2.data(), key2.size()}, {value2.data(), value2.size()});
         
+        std::cout << "Committing transaction" << std::endl;
         txn.commit();
         
         // 读取数据
@@ -37,17 +40,21 @@ int main() {
         
         // 查找第一个键
         auto result = cursor.to_first();
-        if (!result.done) {
+        if (result.done) {
             std::string found_key(reinterpret_cast<const char*>(result.key.data()), result.key.size());
             std::string found_value(reinterpret_cast<const char*>(result.value.data()), result.value.size());
             std::cout << "Found: " << found_key << " = " << found_value << std::endl;
+        } else {
+            std::cout << "No data found for first key " << key1 << std::endl;
         }
         
         // 查找特定键
         result = cursor.find({key1.data(), key1.size()});
-        if (!result.done) {
+        if (result.done) {
             std::string found_value(reinterpret_cast<const char*>(result.value.data()), result.value.size());
             std::cout << "Found key1: " << found_value << std::endl;
+        } else {
+            std::cout << "No data found for key1 " << key1 << std::endl;
         }
         
         std::cout << "MDBX test completed successfully!" << std::endl;
