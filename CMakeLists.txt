@@ -22,7 +22,7 @@ if(PKG_CONFIG_FOUND)
 endif()
 
 # 引入 CPM.cmake
-include(cmake/CPM.cmake/cmake/CPM.cmake)
+include(cmake/CPM.cmake)
 
 # RocksDB / Boost / OpenSSL 通过 vcpkg.json 管理
 # 这里不用手写 find_package，vcpkg 会自动集成
