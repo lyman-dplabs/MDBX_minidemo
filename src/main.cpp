@@ -6,7 +6,6 @@
 
 #include <fmt/core.h>
 #include <filesystem>
-#include <iostream>
 
 // Helper function to perform and print a query.
 void perform_query(QueryEngine& engine, std::string_view account, std::uint64_t block) {
