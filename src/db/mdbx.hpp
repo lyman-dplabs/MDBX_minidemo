@@ -21,6 +21,7 @@
 #pragma GCC diagnostic pop
 
 #include <utility>
+#include <type_traits>
 
 // Custom function_ref implementation (similar to absl::FunctionRef)
 template<typename F>
@@ -34,8 +35,9 @@ class function_ref<R(Args...)> {
 public:
     template<typename T>
     function_ref(T&& t) : obj_(const_cast<void*>(static_cast<const void*>(std::addressof(t)))) {
+        using DecayT = std::decay_t<T>;
         callback_ = [](void* obj, Args... args) -> R {
-            return (*static_cast<const T*>(obj))(std::forward<Args>(args)...);
+            return (*static_cast<const DecayT*>(obj))(std::forward<Args>(args)...);
         };
     }
 

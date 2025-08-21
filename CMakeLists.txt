@@ -141,7 +141,7 @@ target_link_libraries(test_rocksdb PRIVATE core_logic)
 
 # Simple MDBX test
 if(MDBX_FOUND)
-    add_executable(test_mdbx_simple test_mdbx_simple.cpp)
+    add_executable(test_mdbx_simple test_mdbx_simple.cpp src/db/mdbx.cpp)
     target_include_directories(test_mdbx_simple PRIVATE ${MDBX_INCLUDE_DIRS})
     target_link_libraries(test_mdbx_simple PRIVATE mdbx-static)
     target_compile_definitions(test_mdbx_simple PRIVATE HAVE_MDBX=1)
