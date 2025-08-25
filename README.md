@@ -59,6 +59,9 @@ sudo yum install libmdbx-devel
 # 构建并运行单元测试
 ./run.sh --tests
 
+# 构建并运行MDBX需求验证测试
+./run.sh --mdbx --test-demand
+
 # 构建并运行所有组件
 ./run.sh --demo --benchmark --tests
 ```
@@ -114,6 +117,7 @@ sudo yum install libmdbx-devel
 | `--demo` | 运行主演示程序 |
 | `--benchmark` | 运行性能基准测试 |
 | `--tests` | 运行单元测试 |
+| `--test-demand` | 运行MDBX需求验证测试 |
 
 ### 基准测试选项
 
@@ -142,7 +146,9 @@ mdbx_demo/
 ├── third_party/          # 第三方依赖
 │   └── vcpkg/           # vcpkg 包管理器
 ├── build/                # 构建输出目录
-└── test_*.cpp           # 测试文件
+├── test_*.cpp           # 测试文件
+├── test_mdbx_demand.cpp # MDBX需求验证测试
+└── test_demand.md       # 测试需求规格说明
 ```
 
 ## 常见问题
@@ -218,3 +224,52 @@ mdbx_demo/
 ./run.sh --benchmark --filter "Query*"
 ./run.sh --benchmark --filter "Range*"
 ```
+
+## MDBX需求验证测试
+
+项目包含专门的MDBX功能验证测试 (`test_mdbx_demand.cpp`)，用于验证MDBX数据库的关键功能需求：
+
+### 基础功能测试
+
+1. **事务提交和回滚测试**
+   - 验证读写事务commit后表和数据的正确创建
+   - 验证读写事务abort后表不会被创建
+
+2. **只读事务限制测试**
+   - 验证只读事务无法执行写操作
+   - 通过类型系统确保只读事务的安全性
+
+3. **并发事务测试**
+   - 多个只读事务并发读取
+   - 读写事务与只读事务的MVCC隔离特性
+
+4. **DUPSORT表功能测试**
+   - 同一键多个不同值的存储
+   - 重复值的自动去重
+   - 精确的键值对查找
+
+### 业务功能测试
+
+1. **GET_BOTH_RANGE等价功能**
+   - 地址到区块高度的范围查询
+   - 使用`lower_bound_multivalue`实现范围查找
+
+2. **PREV_DUP等价功能**
+   - 多值表中的前序值查找
+   - 使用`to_current_prev_multi`实现前序导航
+
+3. **多表原子性事务**
+   - 单一事务中对多个表的原子写入
+   - 事务回滚时的一致性保证
+
+### 运行测试
+
+```bash
+# 运行完整的MDBX需求验证测试
+./run.sh --mdbx --test-demand
+
+# 包含在所有测试中
+./run.sh --mdbx --tests
+```
+
+该测试确保MDBX封装API满足所有指定的功能需求，为区块链状态存储提供可靠的数据库操作接口。
