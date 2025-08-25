@@ -8,6 +8,7 @@
 #include <rocksdb/slice.h>
 
 #include <stdexcept>
+#include <cstdint>
 
 // --- PImpl Definition ---
 struct RocksDbImpl::RocksDbPimpl {
@@ -57,7 +58,7 @@ void RocksDbImpl::put(std::span<const std::byte> key, std::span<const std::byte>
     }
 }
 
-auto RocksDbImpl::get_state(std::string_view account_name, std::uint64_t block_number)
+auto RocksDbImpl::get_state(std::string_view account_name, uint64_t block_number)
     -> std::optional<std::vector<std::byte>> {
     
     // 1. Create iterator

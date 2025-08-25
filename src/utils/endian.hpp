@@ -4,7 +4,7 @@
 #include <array>
 #include <bit>        // For std::endian and std::byteswap
 #include <cstdint>
-#include <span>
+#include <cstdint>
 
 namespace utils {
 
@@ -16,8 +16,8 @@ namespace utils {
  * @param value The integer value to convert.
  * @return A std::array of 8 bytes representing the integer in big-endian format.
  */
-inline auto to_big_endian_bytes(std::uint64_t value) -> std::array<std::byte, 8> {
-    const std::uint64_t be_value = (std::endian::native == std::endian::little) ? std::byteswap(value) : value;
+inline auto to_big_endian_bytes(uint64_t value) -> std::array<std::byte, 8> {
+    const uint64_t be_value = (std::endian::native == std::endian::little) ? std::byteswap(value) : value;
     return std::bit_cast<std::array<std::byte, 8>>(be_value);
 }
 
@@ -27,10 +27,10 @@ inline auto to_big_endian_bytes(std::uint64_t value) -> std::array<std::byte, 8>
  * @param data A span of exactly 8 bytes representing the integer in big-endian format.
  * @return The converted integer value.
  */
-inline auto from_big_endian_bytes(std::span<const std::byte, 8> data) -> std::uint64_t {
+inline auto from_big_endian_bytes(std::span<const std::byte, 8> data) -> uint64_t {
     std::array<std::byte, 8> byte_array;
     std::copy(data.begin(), data.end(), byte_array.begin());
-    const auto be_value = std::bit_cast<std::uint64_t>(byte_array);
+    const auto be_value = std::bit_cast<uint64_t>(byte_array);
     return (std::endian::native == std::endian::little) ? std::byteswap(be_value) : be_value;
 }
 

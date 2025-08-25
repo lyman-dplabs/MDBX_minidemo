@@ -6,9 +6,10 @@
 
 #include <fmt/core.h>
 #include <filesystem>
+#include <cstdint>
 
 // Helper function to perform and print a query.
-void perform_query(QueryEngine& engine, std::string_view account, std::uint64_t block) {
+void perform_query(QueryEngine& engine, std::string_view account, uint64_t block) {
     fmt::print("Querying for account '{}' at block {}...\n", account, block);
     auto state = engine.find_account_state(account, block);
     if (state) {
