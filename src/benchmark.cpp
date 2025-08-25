@@ -12,6 +12,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <cstdint>
 
 // --- Test Data Configuration ---
 constexpr size_t NUM_ACCOUNTS = 100;
@@ -23,7 +24,7 @@ class BenchmarkDataGenerator {
 public:
     struct AccountData {
         std::string account_name;
-        std::vector<std::uint64_t> block_numbers;
+        std::vector<uint64_t> block_numbers;
         std::vector<std::string> states;
     };
 
@@ -32,7 +33,7 @@ public:
         accounts.reserve(NUM_ACCOUNTS);
 
         std::mt19937 gen{42}; // Fixed seed for reproducibility
-        std::uniform_int_distribution<std::uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
+        std::uniform_int_distribution<uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
 
         for (size_t i = 0; i < NUM_ACCOUNTS; ++i) {
             AccountData account;
@@ -41,7 +42,7 @@ public:
             account.states.reserve(NUM_BLOCKS_PER_ACCOUNT);
 
             // Generate sorted block numbers
-            std::set<std::uint64_t> unique_blocks;
+            std::set<uint64_t> unique_blocks;
             while (unique_blocks.size() < NUM_BLOCKS_PER_ACCOUNT) {
                 unique_blocks.insert(block_dist(gen));
             }
@@ -49,7 +50,7 @@ public:
             for (auto block : unique_blocks) {
                 account.block_numbers.push_back(block);
                 account.states.push_back(fmt::format(
-                    R"({{"balance": "{}", "nonce": "{}", "block": "{}"}})", 
+                    R"({{"balance": "{}", "nonce": "{}", "block": "{}"}})",
                     block * 1000, block % 256, block));
             }
 
@@ -75,7 +76,7 @@ public:
         mdbx_engine_ = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
         populate_database(*mdbx_engine_);
 #endif
-        
+
         rocksdb_engine_ = std::make_unique<QueryEngine>(std::make_unique<RocksDbImpl>(rocksdb_path_));
         populate_database(*rocksdb_engine_);
 
@@ -103,13 +104,13 @@ protected:
     void prepare_query_data() {
         std::mt19937 gen{123};
         std::uniform_int_distribution<size_t> account_dist{0, NUM_ACCOUNTS - 1};
-        std::uniform_int_distribution<std::uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
+        std::uniform_int_distribution<uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
 
         // Prepare exact match queries (query blocks that exist)
         for (size_t i = 0; i < 1000; ++i) {
             const auto& account = test_data_[account_dist(gen)];
             std::uniform_int_distribution<size_t> block_idx_dist{0, account.block_numbers.size() - 1};
-            
+
             exact_queries_.emplace_back(account.account_name, account.block_numbers[block_idx_dist(gen)]);
         }
 
@@ -127,8 +128,8 @@ protected:
 
     // Test data
     std::vector<BenchmarkDataGenerator::AccountData> test_data_;
-    std::vector<std::pair<std::string, std::uint64_t>> exact_queries_;
-    std::vector<std::pair<std::string, std::uint64_t>> lookback_queries_;
+    std::vector<std::pair<std::string, uint64_t>> exact_queries_;
+    std::vector<std::pair<std::string, uint64_t>> lookback_queries_;
 
     // Database paths
     const std::filesystem::path mdbx_path_ = std::filesystem::temp_directory_path() / "benchmark_mdbx";
@@ -151,7 +152,7 @@ BENCHMARK_F(DatabaseBenchmark, MDBX_ExactMatch)(benchmark::State& state) {
         benchmark::DoNotOptimize(result);
         ++query_idx;
     }
-    
+
     state.SetItemsProcessed(state.iterations());
 }
 
@@ -163,7 +164,7 @@ BENCHMARK_F(DatabaseBenchmark, MDBX_Lookback)(benchmark::State& state) {
         benchmark::DoNotOptimize(result);
         ++query_idx;
     }
-    
+
     state.SetItemsProcessed(state.iterations());
 }
 #endif
@@ -177,7 +178,7 @@ BENCHMARK_F(DatabaseBenchmark, RocksDB_ExactMatch)(benchmark::State& state) {
         benchmark::DoNotOptimize(result);
         ++query_idx;
     }
-    
+
     state.SetItemsProcessed(state.iterations());
 }
 
@@ -189,7 +190,7 @@ BENCHMARK_F(DatabaseBenchmark, RocksDB_Lookback)(benchmark::State& state) {
         benchmark::DoNotOptimize(result);
         ++query_idx;
     }
-    
+
     state.SetItemsProcessed(state.iterations());
 }
 
