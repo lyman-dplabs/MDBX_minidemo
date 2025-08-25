@@ -1,6 +1,7 @@
 #if !HAVE_MDBX
 #include "db/mdbx_impl.hpp"
 #include <stdexcept>
+#include <cstdint>
 
 // Stub implementation when MDBX is not available
 struct MdbxImpl::MdbxPimpl {};
@@ -15,7 +16,7 @@ void MdbxImpl::put(std::span<const std::byte> key, std::span<const std::byte> va
     throw std::runtime_error("MDBX support not compiled in");
 }
 
-auto MdbxImpl::get_state(std::string_view account_name, std::uint64_t block_number)
+auto MdbxImpl::get_state(std::string_view account_name, uint64_t block_number)
     -> std::optional<std::vector<std::byte>> {
     throw std::runtime_error("MDBX support not compiled in");
 }

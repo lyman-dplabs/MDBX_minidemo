@@ -6,9 +6,10 @@
 
 #include <fmt/core.h>
 #include <filesystem>
+#include <cstdint>
 
 // Helper function to perform and print a query.
-void perform_query(QueryEngine& engine, std::string_view account, std::uint64_t block) {
+void perform_query(QueryEngine& engine, std::string_view account, uint64_t block) {
     fmt::print("Querying for account '{}' at block {}...\n", account, block);
     auto state = engine.find_account_state(account, block);
     if (state) {
@@ -34,7 +35,7 @@ int main() {
         {
             auto db = std::make_unique<MdbxImpl>(mdbx_db_path);
             QueryEngine engine(std::move(db));
-            
+
             // --- Data Population ---
             fmt::print("Populating MDBX database with sample data for account 'vitalik'...\n");
             engine.set_account_state("vitalik", 1, R"({"balance": "100", "nonce": "0"})");
