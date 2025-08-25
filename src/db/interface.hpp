@@ -4,7 +4,7 @@
 #include <span>
 #include <string_view>
 #include <vector>
-#include <cstdint>
+
 class IDatabase {
 public:
     virtual ~IDatabase() = default;
@@ -24,5 +24,5 @@ public:
      * @param block_number The block number to query at.
      * @return An optional containing the state as a vector of bytes if found, otherwise std::nullopt.
      */
-    virtual auto get_state(std::string_view account_name, uint64_t block_number) -> std::optional<std::vector<std::byte>> = 0;
+    virtual auto get_state(std::string_view account_name, std::uint64_t block_number) -> std::optional<std::vector<std::byte>> = 0;
 };

@@ -7,7 +7,6 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
-#include <cstdint>
 
 // --- PImpl Definition ---
 // This struct holds the MDBX handles and is hidden from the header file.
@@ -54,7 +53,7 @@ void MdbxImpl::put(std::span<const std::byte> key, std::span<const std::byte> va
     txn.commit();
 }
 
-auto MdbxImpl::get_state(std::string_view account_name, uint64_t block_number)
+auto MdbxImpl::get_state(std::string_view account_name, std::uint64_t block_number)
     -> std::optional<std::vector<std::byte>> {
     auto txn = pimpl_->env.start_read();
     auto cursor = txn.open_cursor(pimpl_->dbi);

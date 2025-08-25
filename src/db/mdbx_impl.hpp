@@ -4,7 +4,6 @@
 
 #include <filesystem>
 #include <memory>
-#include <cstdint>
 
 // Forward declarations to avoid including mdbx.hpp in a public header,
 // which is good practice to reduce compile times for consumers of this class.
@@ -31,7 +30,7 @@ public:
 
     void put(std::span<const std::byte> key, std::span<const std::byte> value) override;
 
-    auto get_state(std::string_view account_name, uint64_t block_number)
+    auto get_state(std::string_view account_name, std::uint64_t block_number)
         -> std::optional<std::vector<std::byte>> override;
 
 private:

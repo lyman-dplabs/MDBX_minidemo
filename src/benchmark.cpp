@@ -12,7 +12,6 @@
 #include <set>
 #include <string>
 #include <vector>
-#include <cstdint>
 
 // --- Test Data Configuration ---
 constexpr size_t NUM_ACCOUNTS = 100;
@@ -24,7 +23,7 @@ class BenchmarkDataGenerator {
 public:
     struct AccountData {
         std::string account_name;
-        std::vector<uint64_t> block_numbers;
+        std::vector<std::uint64_t> block_numbers;
         std::vector<std::string> states;
     };
 
@@ -33,7 +32,7 @@ public:
         accounts.reserve(NUM_ACCOUNTS);
 
         std::mt19937 gen{42}; // Fixed seed for reproducibility
-        std::uniform_int_distribution<uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
+        std::uniform_int_distribution<std::uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
 
         for (size_t i = 0; i < NUM_ACCOUNTS; ++i) {
             AccountData account;
@@ -42,7 +41,7 @@ public:
             account.states.reserve(NUM_BLOCKS_PER_ACCOUNT);
 
             // Generate sorted block numbers
-            std::set<uint64_t> unique_blocks;
+            std::set<std::uint64_t> unique_blocks;
             while (unique_blocks.size() < NUM_BLOCKS_PER_ACCOUNT) {
                 unique_blocks.insert(block_dist(gen));
             }
@@ -104,7 +103,7 @@ protected:
     void prepare_query_data() {
         std::mt19937 gen{123};
         std::uniform_int_distribution<size_t> account_dist{0, NUM_ACCOUNTS - 1};
-        std::uniform_int_distribution<uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
+        std::uniform_int_distribution<std::uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
 
         // Prepare exact match queries (query blocks that exist)
         for (size_t i = 0; i < 1000; ++i) {
@@ -128,8 +127,8 @@ protected:
 
     // Test data
     std::vector<BenchmarkDataGenerator::AccountData> test_data_;
-    std::vector<std::pair<std::string, uint64_t>> exact_queries_;
-    std::vector<std::pair<std::string, uint64_t>> lookback_queries_;
+    std::vector<std::pair<std::string, std::uint64_t>> exact_queries_;
+    std::vector<std::pair<std::string, std::uint64_t>> lookback_queries_;
 
     // Database paths
     const std::filesystem::path mdbx_path_ = std::filesystem::temp_directory_path() / "benchmark_mdbx";
