@@ -833,7 +833,7 @@ int main() {
         test_utility_functions(env);
 
         // 测试8: PooledCursor特有功能
-        // test_pooled_cursor_features(env);
+        test_pooled_cursor_features(env);
 
         // 测试9: 重要功能（DUPSORT相关）
         test_important_features(env);
