@@ -1,5 +1,5 @@
-#include "src/core/query_engine.hpp"
-#include "src/db/rocksdb_impl.hpp"
+#include "core/query_engine.hpp"
+#include "db/rocksdb_impl.hpp"
 
 #include <fmt/core.h>
 #include <filesystem>

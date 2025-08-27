@@ -384,19 +384,19 @@ run_benchmarks() {
 run_tests() {
     log_step "Running tests"
     
-    # Check for test executables
+    # Check for test executables (now located in tests subdirectory)
     local test_files=()
-    if [[ -x "${BUILD_DIR}/test_endian" ]]; then
-        test_files+=("${BUILD_DIR}/test_endian")
+    if [[ -x "${BUILD_DIR}/tests/test_endian" ]]; then
+        test_files+=("${BUILD_DIR}/tests/test_endian")
     fi
-    if [[ -x "${BUILD_DIR}/test_rocksdb" && "${ENABLE_ROCKSDB}" == "true" ]]; then
-        test_files+=("${BUILD_DIR}/test_rocksdb")
+    if [[ -x "${BUILD_DIR}/tests/test_rocksdb" && "${ENABLE_ROCKSDB}" == "true" ]]; then
+        test_files+=("${BUILD_DIR}/tests/test_rocksdb")
     fi
-    if [[ -x "${BUILD_DIR}/test_mdbx_simple" ]]; then
-        test_files+=("${BUILD_DIR}/test_mdbx_simple")
+    if [[ -x "${BUILD_DIR}/tests/test_mdbx_simple" ]]; then
+        test_files+=("${BUILD_DIR}/tests/test_mdbx_simple")
     fi
-    if [[ -x "${BUILD_DIR}/test_mdbx_demand" ]]; then
-        test_files+=("${BUILD_DIR}/test_mdbx_demand")
+    if [[ -x "${BUILD_DIR}/tests/test_mdbx_demand" ]]; then
+        test_files+=("${BUILD_DIR}/tests/test_mdbx_demand")
     fi
     
     if [[ ${#test_files[@]} -eq 0 ]]; then
@@ -423,7 +423,7 @@ run_tests() {
 run_mdbx_demand_test() {
     log_step "Running MDBX demand requirements test"
     
-    if [[ ! -x "${BUILD_DIR}/test_mdbx_demand" ]]; then
+    if [[ ! -x "${BUILD_DIR}/tests/test_mdbx_demand" ]]; then
         log_error "MDBX demand test executable not found. Build the project first."
         return 1
     fi
@@ -432,7 +432,7 @@ run_mdbx_demand_test() {
     echo
     
     cd "${BUILD_DIR}"
-    if ./test_mdbx_demand; then
+    if ./tests/test_mdbx_demand; then
         cd "${PROJECT_ROOT}"
         echo
         log_success "MDBX demand test passed"

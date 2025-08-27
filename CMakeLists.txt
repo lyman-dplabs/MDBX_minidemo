@@ -116,27 +116,10 @@ target_link_libraries(benchmark_runner PRIVATE
     benchmark::benchmark_main # google benchmark provides a main function
 )
 
-# --- Test Executables ---
-# Endian test
-add_executable(test_endian test_endian.cpp)
-target_include_directories(test_endian PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(test_endian PRIVATE fmt::fmt)
-
-# RocksDB test (optional)
-if(ENABLE_ROCKSDB)
-    add_executable(test_rocksdb test_rocksdb.cpp)
-    target_include_directories(test_rocksdb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(test_rocksdb PRIVATE core_logic)
-endif()
-
-# MDBX tests (always available since MDBX is required)
-add_executable(test_mdbx_simple test_mdbx_simple.cpp src/db/mdbx.cpp)
-target_include_directories(test_mdbx_simple PRIVATE ${MDBX_INCLUDE_DIRS})
-target_link_libraries(test_mdbx_simple PRIVATE mdbx-static)
-
-add_executable(test_mdbx_demand test_mdbx_demand.cpp src/db/mdbx.cpp)
-target_include_directories(test_mdbx_demand PRIVATE ${MDBX_INCLUDE_DIRS})
-target_link_libraries(test_mdbx_demand PRIVATE mdbx-static)
+# --- Test Suite ---
+# All test configurations are now managed in tests/CMakeLists.txt
+# This provides better organization and separation of concerns
+add_subdirectory(tests)
 
 # --- Installation Rules (Optional) ---
 install(TARGETS mdbx_demo benchmark_runner

@@ -1,4 +1,4 @@
-#include "src/utils/endian.hpp"
+#include "utils/endian.hpp"
 #include <fmt/core.h>
 
 int main() {
