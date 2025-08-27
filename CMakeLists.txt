@@ -54,11 +54,38 @@ endif()
 # RocksDB 是可选依赖
 option(ENABLE_ROCKSDB "Enable RocksDB support" OFF)
 if(ENABLE_ROCKSDB)
-    find_package(RocksDB CONFIG REQUIRED)
-    message(STATUS "RocksDB support enabled")
+    message(STATUS "RocksDB support requested - checking availability...")
+    
+    # 首先尝试通过 vcpkg 查找 RocksDB
+    find_package(RocksDB CONFIG QUIET)
+    
+    if(RocksDB_FOUND)
+        message(STATUS "RocksDB found via vcpkg: ${RocksDB_DIR}")
+        message(STATUS "RocksDB support enabled")
+    else()
+        message(STATUS "RocksDB not found via vcpkg. Installing via vcpkg...")
+        
+        # 使用 vcpkg 安装 RocksDB
+        execute_process(
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/third_party/vcpkg/vcpkg install rocksdb
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE VCPKG_INSTALL_RESULT
+        )
+        
+        if(VCPKG_INSTALL_RESULT EQUAL 0)
+            message(STATUS "RocksDB installed successfully via vcpkg")
+            # 再次查找
+            find_package(RocksDB CONFIG REQUIRED)
+            message(STATUS "RocksDB found after installation: ${RocksDB_DIR}")
+        else()
+            message(FATAL_ERROR "Failed to install RocksDB via vcpkg. Please install it manually: ./third_party/vcpkg/vcpkg install rocksdb")
+        endif()
+    endif()
 else()
     message(STATUS "RocksDB support disabled")
 endif()
+
+# 其他必需依赖
 find_package(benchmark CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)

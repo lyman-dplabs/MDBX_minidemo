@@ -2,9 +2,8 @@
   "name": "mdbx-demo",
   "version-string": "0.1.0",
   "dependencies": [
-    "rocksdb",
     "benchmark",
-    "gtest",
+    "gtest", 
     "fmt"
   ]
 }

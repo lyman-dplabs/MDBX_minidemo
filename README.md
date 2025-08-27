@@ -26,19 +26,15 @@
 # 安装基础依赖
 sudo apt update
 sudo apt install cmake build-essential git
-
-# 安装 RocksDB (可选，仅在使用 --rocksdb 选项时需要)
-sudo apt install librocksdb-dev
 ```
 
 #### CentOS/RHEL
 ```bash
 # 安装基础依赖
 sudo yum install cmake gcc-c++ git
-
-# 安装 RocksDB (可选，仅在使用 --rocksdb 选项时需要)
-sudo yum install rocksdb-devel
 ```
+
+**注意**: RocksDB 依赖会在启用 `--rocksdb` 选项时自动通过 vcpkg 安装，无需手动安装系统包。
 
 ### 构建和运行
 
@@ -191,8 +187,9 @@ mdbx_demo/
 **问题**: 使用 `--rocksdb` 选项时构建失败。
 
 **解决方案**:
-- 安装系统级 RocksDB 库：`sudo apt install librocksdb-dev`
-- 或者通过 vcpkg 管理 RocksDB 依赖
+- RocksDB 会自动通过 vcpkg 安装，请确保网络连接正常
+- 如果自动安装失败，手动运行：`./third_party/vcpkg/vcpkg install rocksdb`
+- 确保 vcpkg 已正确初始化：`git submodule update --init --recursive`
 
 ### 3. MDBX 构建问题
 
