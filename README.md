@@ -310,40 +310,195 @@ BENCHMARK_F(DatabaseBenchmark, MDBX_ExactMatch)(benchmark::State& state) {
 
 ## MDBX需求验证测试
 
-项目包含专门的MDBX功能验证测试 (`test_mdbx_demand.cpp`)，用于验证MDBX数据库的关键功能需求：
+项目包含专门的MDBX功能验证测试 (`tests/integration/test_mdbx_demand.cpp`)，基于 `test_demand.md` 的需求规格，全面验证MDBX数据库的关键功能。该测试确保MDBX封装API满足区块链状态存储的所有功能需求。
 
 ### 基础功能测试
 
-1. **事务提交和回滚测试**
-   - 验证读写事务commit后表和数据的正确创建
-   - 验证读写事务abort后表不会被创建
+#### 1. 事务提交和回滚测试 (`test_basic_1_rw_transaction_commit_abort`)
+```cpp
+// 测试读写事务的生命周期管理
+RWTxnManaged rw_txn(g_env);
+auto cursor = rw_txn.rw_cursor(table_config);
+cursor->insert(str_to_slice("key1"), str_to_slice("value1"));
 
-2. **只读事务限制测试**
-   - 验证只读事务无法执行写操作
-   - 通过类型系统确保只读事务的安全性
+// commit场景：数据持久化
+rw_txn.commit_and_stop();  // ✅ 表和数据被创建
 
-3. **并发事务测试**
-   - 多个只读事务并发读取
-   - 读写事务与只读事务的MVCC隔离特性
+// abort场景：数据回滚
+rw_txn.abort();            // ✅ 表不会被创建
+```
 
-4. **DUPSORT表功能测试**
-   - 同一键多个不同值的存储
-   - 重复值的自动去重
-   - 精确的键值对查找
+**验证内容**：
+- 读写事务 (`MDBX_TXN_READWRITE`) commit后表和数据正确创建
+- 读写事务 abort后表不会被创建
+- 事务状态管理和资源清理
+
+#### 2. 只读事务操作限制测试 (`test_basic_2_readonly_transaction_restrictions`)
+```cpp
+// 只读事务只能读取，不能写入
+ROTxnManaged ro_txn(g_env);  // MDBX_TXN_RDONLY
+auto ro_cursor = ro_txn.ro_cursor(table_config);
+
+// ✅ 可以读取数据
+auto result = ro_cursor->find(str_to_slice("key"));
+
+// ❌ 无法获取写游标（编译时阻止）
+// ro_txn.rw_cursor() 方法不存在
+```
+
+**验证内容**：
+- 只读事务类型安全：通过类型系统在编译时阻止写操作
+- 只读事务可以正常读取现有数据
+- 事务ID和状态查询功能
+
+#### 3. 并发事务测试 (`test_basic_3_concurrent_transactions`)
+```cpp
+// 场景1：多个只读事务并发
+ROTxnManaged ro_txn1(g_env), ro_txn2(g_env), ro_txn3(g_env);
+// 所有事务都能读取相同数据
+
+// 场景2：MVCC隔离测试
+ROTxnManaged old_txn(g_env);              // 先启动只读事务
+auto initial_value = old_txn.read("key"); // 读取初始值
+
+{
+    RWTxnManaged rw_txn(g_env);
+    rw_txn.modify("key", "new_value");     // 修改数据
+    rw_txn.commit_and_stop();              // 提交修改
+}
+
+auto unchanged = old_txn.read("key");      // ✅ 仍读取到初始值（MVCC）
+```
+
+**验证内容**：
+- 多个只读事务可以并发访问相同数据
+- MVCC（多版本并发控制）隔离特性：老事务看不到新提交的修改
+- 新事务能看到最新的修改结果
+
+#### 4. DUPSORT表功能测试 (`test_basic_4_dupsort_table_operations`)
+```cpp
+// 创建支持多值的表
+MapConfig dupsort_config{"test", ::mdbx::key_mode::usual, ::mdbx::value_mode::multi};
+auto cursor = rw_txn.rw_cursor_dup_sort(dupsort_config);
+
+// 同一key存储多个不同value
+cursor->append(str_to_slice("user123"), str_to_slice("role_admin"));
+cursor->append(str_to_slice("user123"), str_to_slice("role_editor"));
+cursor->append(str_to_slice("user123"), str_to_slice("role_viewer"));
+
+// ✅ 存储了3个不同值
+assert(cursor->count_multivalue() == 3);
+
+// ❌ 重复值不会被重复存储
+cursor->append(str_to_slice("user123"), str_to_slice("role_admin")); // 异常或被忽略
+```
+
+**验证内容**：
+- DUPSORT模式允许同一key存储多个不同value
+- 重复value不会被重复存储（自动去重）
+- 精确查找特定的key-value组合
+- 多值计数和遍历功能
 
 ### 业务功能测试
 
-1. **GET_BOTH_RANGE等价功能**
-   - 地址到区块高度的范围查询
-   - 使用`lower_bound_multivalue`实现范围查找
+#### 1. GET_BOTH_RANGE等价功能测试 (`test_business_1_get_both_range_equivalent`)
+```cpp
+// 场景：区块链地址到区块高度的映射
+// 数据：addr -> hex(100), hex(150), hex(200)
 
-2. **PREV_DUP等价功能**
-   - 多值表中的前序值查找
-   - 使用`to_current_prev_multi`实现前序导航
+// 查询：找到 >= hex(175) 的第一个值
+auto result = cursor->lower_bound_multivalue(
+    str_to_slice(addr), 
+    str_to_slice(uint64_to_hex(175))
+);
 
-3. **多表原子性事务**
-   - 单一事务中对多个表的原子写入
-   - 事务回滚时的一致性保证
+// ✅ 应该找到 hex(200)
+assert(hex_to_uint64(result.value.as_string()) == 200);
+```
+
+**验证内容**：
+- 使用 `lower_bound_multivalue` 实现 MDBX_GET_BOTH_RANGE 功能
+- 区块链地址到区块高度的范围查询场景
+- 边界条件测试（精确匹配、超出范围）
+
+#### 2. PREV_DUP等价功能测试 (`test_business_2_prev_dup_equivalent`)
+```cpp
+// 定位到特定的key-value：addr -> hex(200)
+cursor->find_multivalue(str_to_slice(addr), str_to_slice(uint64_to_hex(200)));
+
+// 查找前一个value
+auto prev_result = cursor->to_current_prev_multi();
+
+// ✅ 应该找到 hex(150)
+assert(hex_to_uint64(prev_result.value.as_string()) == 150);
+```
+
+**验证内容**：
+- 使用 `to_current_prev_multi` 实现 MDBX_PREV_DUP 功能
+- 多值表中的前后导航功能
+- 边界情况：从最小值查找前一个值
+
+#### 3. 多表原子性事务测试 (`test_business_3_atomic_multi_table_transaction`)
+```cpp
+// 区块链场景：同时更新状态表和存储表
+{
+    RWTxnManaged atomic_txn(g_env);
+    
+    // 表1：地址状态 addr+storagekey -> hex(100)
+    auto cursor1 = atomic_txn.rw_cursor(table1_config);
+    cursor1->insert(str_to_slice(combined_key), str_to_slice(uint64_to_hex(100)));
+    
+    // 表2：存储数据 addr+storagekey -> hex(100)+storagevalue
+    auto cursor2 = atomic_txn.rw_cursor(table2_config);
+    cursor2->insert(str_to_slice(combined_key), str_to_slice(value_with_storage));
+    
+    // 原子提交：要么都成功，要么都失败
+    atomic_txn.commit_and_stop();
+}
+
+// 验证两个表的数据都存在
+assert(table1_has_data && table2_has_data);
+```
+
+**验证内容**：
+- 单一事务内对多个表的原子写入操作
+- 事务提交时的原子性保证：所有操作同时生效
+- 事务回滚时的一致性保证：所有操作都被撤销
+- 区块链状态更新的典型使用场景
+
+### 测试架构特点
+
+#### 环境设置和清理
+```cpp
+void setup_environment() {
+    // 自动清理旧测试数据
+    std::filesystem::remove_all("/tmp/test_mdbx_demand");
+    
+    // 配置测试环境
+    EnvConfig config{
+        .path = "/tmp/test_mdbx_demand",
+        .max_size = 128_Mebi,
+        .max_tables = 64,
+        .max_readers = 50
+    };
+    
+    g_env = open_env(config);
+}
+```
+
+#### 辅助工具函数
+- **类型转换**: `str_to_byteview`, `byteview_to_str`, `str_to_slice`
+- **数据格式化**: `uint64_to_hex`, `hex_to_uint64` （区块链十六进制格式）
+- **结果验证**: `assert_cursor_result` （统一的断言验证）
+- **字符串处理**: `to_std_string` （跨类型字符串转换）
+
+#### 测试覆盖范围
+- ✅ **事务管理**: 提交、回滚、并发、隔离
+- ✅ **数据操作**: 插入、查询、更新、删除
+- ✅ **高级功能**: 多值表、范围查询、导航操作
+- ✅ **原子性**: 多表事务、一致性保证
+- ✅ **边界条件**: 空结果、重复数据、并发访问
+- ✅ **实际场景**: 区块链地址映射、状态存储
 
 ### 运行测试
 
@@ -353,6 +508,24 @@ BENCHMARK_F(DatabaseBenchmark, MDBX_ExactMatch)(benchmark::State& state) {
 
 # 包含在所有测试中
 ./run.sh --tests
+
+# 仅运行需求验证测试（直接执行）
+./build/tests/test_mdbx_demand
 ```
 
-该测试确保MDBX封装API满足所有指定的功能需求，为区块链状态存储提供可靠的数据库操作接口。
+### 测试输出示例
+```
+=== 设置测试环境 ===
+✓ 测试环境设置完成
+
+=== 基础功能1: 读写事务commit和abort测试 ===
+✓ 表 'test_commit_table' 创建成功
+✓ 数据在commit后可读取
+✓ 表 'test_abort_table' 没有创建（符合预期）
+
+... [详细测试输出] ...
+
+🎉 所有测试通过！MDBX需求功能验证完成。
+```
+
+该测试套件确保MDBX封装完全满足 `test_demand.md` 中定义的所有功能需求，为区块链状态存储提供可靠、高性能的数据库操作接口。
