@@ -101,18 +101,24 @@ public:
             test_data_ = BenchmarkDataGenerator::generate_test_data();
         }
         
-        // Initialize MDBX if not already done
-        if (!mdbx_engine_) {
+        // Initialize MDBX data if not already done (but don't keep connection)
+        static bool mdbx_data_initialized = false;
+        if (!mdbx_data_initialized) {
             cleanup_databases();
-            mdbx_engine_ = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
-            populate_database(*mdbx_engine_);
+            auto temp_mdbx_engine = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
+            populate_database(*temp_mdbx_engine);
+            temp_mdbx_engine.reset(); // Close connection after populating data
+            mdbx_data_initialized = true;
         }
         
 #if HAVE_ROCKSDB
-        // Initialize RocksDB if not already done
-        if (!rocksdb_engine_) {
-            rocksdb_engine_ = std::make_unique<QueryEngine>(std::make_unique<RocksDbImpl>(rocksdb_path_));
-            populate_database(*rocksdb_engine_);
+        // Initialize RocksDB data if not already done (but don't keep connection)
+        static bool rocksdb_data_initialized = false;
+        if (!rocksdb_data_initialized) {
+            auto temp_rocksdb_engine = std::make_unique<QueryEngine>(std::make_unique<RocksDbImpl>(rocksdb_path_));
+            populate_database(*temp_rocksdb_engine);
+            temp_rocksdb_engine.reset(); // Close connection after populating data
+            rocksdb_data_initialized = true;
         }
 #endif
 
@@ -127,12 +133,7 @@ public:
     }
     
     ~DatabaseBenchmark() {
-        // Final cleanup
-        mdbx_engine_.reset();
-#if HAVE_ROCKSDB
-        rocksdb_engine_.reset();
-#endif
-        cleanup_databases();
+        // Cleanup will happen at process exit
     }
 
 protected:
@@ -181,64 +182,103 @@ protected:
     static inline const std::filesystem::path mdbx_path_ = std::filesystem::temp_directory_path() / "benchmark_mdbx";
     static inline const std::filesystem::path rocksdb_path_ = std::filesystem::temp_directory_path() / "benchmark_rocksdb";
 
-    // Database instances (shared across all tests)
-    static inline std::unique_ptr<QueryEngine> mdbx_engine_;
-#if HAVE_ROCKSDB
-    static inline std::unique_ptr<QueryEngine> rocksdb_engine_;
-#endif
+    // Both MDBX and RocksDB instances are created per-benchmark, no shared instances needed
 };
 
 // --- MDBX Benchmarks ---
 BENCHMARK_F(DatabaseBenchmark, MDBX_ExactMatch)(benchmark::State& state) {
+    // Create independent MDBX connection for this benchmark
+    auto mdbx_engine = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
+    
     size_t query_idx = 0;
     for (auto _ : state) {
         const auto& [account, block] = exact_queries_[query_idx % exact_queries_.size()];
-        auto result = mdbx_engine_->find_account_state(account, block);
+        auto result = mdbx_engine->find_account_state(account, block);
         benchmark::DoNotOptimize(result);
         ++query_idx;
     }
 
     state.SetItemsProcessed(state.iterations());
+    // MDBX connection will be automatically closed when mdbx_engine goes out of scope
 }
 
 BENCHMARK_F(DatabaseBenchmark, MDBX_Lookback)(benchmark::State& state) {
+    // Create independent MDBX connection for this benchmark
+    auto mdbx_engine = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
+    
     size_t query_idx = 0;
     for (auto _ : state) {
         const auto& [account, block] = lookback_queries_[query_idx % lookback_queries_.size()];
-        auto result = mdbx_engine_->find_account_state(account, block);
+        auto result = mdbx_engine->find_account_state(account, block);
         benchmark::DoNotOptimize(result);
         ++query_idx;
     }
 
     state.SetItemsProcessed(state.iterations());
+    // MDBX connection will be automatically closed when mdbx_engine goes out of scope
 }
 
 // --- RocksDB Benchmarks ---
 #if HAVE_ROCKSDB
 BENCHMARK_F(DatabaseBenchmark, RocksDB_ExactMatch)(benchmark::State& state) {
+    // Create independent RocksDB connection for this benchmark
+    auto rocksdb_engine = std::make_unique<QueryEngine>(std::make_unique<RocksDbImpl>(rocksdb_path_));
+    
     size_t query_idx = 0;
     for (auto _ : state) {
         const auto& [account, block] = exact_queries_[query_idx % exact_queries_.size()];
-        auto result = rocksdb_engine_->find_account_state(account, block);
+        auto result = rocksdb_engine->find_account_state(account, block);
         benchmark::DoNotOptimize(result);
         ++query_idx;
     }
 
     state.SetItemsProcessed(state.iterations());
+    // RocksDB connection will be automatically closed when rocksdb_engine goes out of scope
 }
 
 BENCHMARK_F(DatabaseBenchmark, RocksDB_Lookback)(benchmark::State& state) {
+    // Create independent RocksDB connection for this benchmark
+    auto rocksdb_engine = std::make_unique<QueryEngine>(std::make_unique<RocksDbImpl>(rocksdb_path_));
+    
     size_t query_idx = 0;
     for (auto _ : state) {
         const auto& [account, block] = lookback_queries_[query_idx % lookback_queries_.size()];
-        auto result = rocksdb_engine_->find_account_state(account, block);
+        auto result = rocksdb_engine->find_account_state(account, block);
         benchmark::DoNotOptimize(result);
         ++query_idx;
     }
 
     state.SetItemsProcessed(state.iterations());
+    // RocksDB connection will be automatically closed when rocksdb_engine goes out of scope
 }
 #endif
 
+// Cleanup function to be called at process exit
+void cleanup_at_exit() {
+    try {
+        const std::filesystem::path mdbx_path = std::filesystem::temp_directory_path() / "benchmark_mdbx";
+        const std::filesystem::path rocksdb_path = std::filesystem::temp_directory_path() / "benchmark_rocksdb";
+        
+        if (std::filesystem::exists(mdbx_path)) {
+            std::filesystem::remove_all(mdbx_path);
+        }
+        if (std::filesystem::exists(rocksdb_path)) {
+            std::filesystem::remove_all(rocksdb_path);
+        }
+    } catch (...) {
+        // Ignore cleanup errors during exit
+    }
+}
+
 // Run the benchmark
-BENCHMARK_MAIN();
+int main(int argc, char** argv) {
+    // Register cleanup function to run at process exit
+    std::atexit(cleanup_at_exit);
+    
+    // Run benchmarks
+    ::benchmark::Initialize(&argc, argv);
+    if (::benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
+    ::benchmark::RunSpecifiedBenchmarks();
+    ::benchmark::Shutdown();
+    return 0;
+}

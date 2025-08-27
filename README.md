@@ -246,19 +246,66 @@ mdbx_demo/
 
 项目包含多个性能基准测试，比较不同数据库后端的性能：
 
-- **插入性能**: 批量插入键值对
-- **查询性能**: 随机和顺序查询
-- **范围查询**: 前缀和范围扫描
-- **并发性能**: 多线程访问
+### 测试类型
 
-运行基准测试：
+- **MDBX_ExactMatch**: MDBX 精确匹配查询（查询存在的键值对）
+- **MDBX_Lookback**: MDBX 历史状态查询（查询可能不存在的键，需要回溯到最近的历史状态）
+- **RocksDB_ExactMatch**: RocksDB 精确匹配查询（仅在启用 `--rocksdb` 时可用）
+- **RocksDB_Lookback**: RocksDB 历史状态查询（仅在启用 `--rocksdb` 时可用）
+
+### 基准测试架构设计
+
+基准测试采用了独特的**一次初始化，多次独立连接**的设计模式：
+
+#### 数据初始化阶段
+1. **单次数据生成**: 在 `SetUp` 阶段只生成一次测试数据，避免重复创建
+2. **预填充数据库**: 为每个数据库（MDBX/RocksDB）创建临时连接，填充测试数据后立即关闭连接
+3. **查询数据预处理**: 预生成 1000 个精确匹配查询和 1000 个历史状态查询，确保基准测试结果的可重复性
+
+#### 基准测试执行阶段
+1. **独立数据库连接**: 每个 `BENCHMARK_F` 测试都创建自己独立的数据库连接实例
+2. **线程安全**: 避免多线程环境下的共享状态问题，特别是 RocksDB 的 pthread 锁冲突
+3. **公平性比较**: MDBX 和 RocksDB 使用相同的连接模式，确保性能比较的公平性
+4. **自动清理**: 连接在测试结束时自动关闭，数据库文件在进程退出时统一清理
+
+#### 设计优势
+
+```cpp
+// 传统的共享连接模式（已弃用，有并发问题）
+static std::unique_ptr<QueryEngine> shared_engine; // ❌ 多线程不安全
+
+// 当前的独立连接模式（推荐）
+BENCHMARK_F(DatabaseBenchmark, MDBX_ExactMatch)(benchmark::State& state) {
+    // ✅ 每个测试创建独立连接
+    auto mdbx_engine = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
+    // ... 执行基准测试 ...
+    // 连接在作用域结束时自动关闭
+}
+```
+
+**优势**：
+- **线程安全**: 消除了共享状态导致的竞态条件
+- **隔离性**: 每个测试相互独立，不会互相干扰
+- **可靠性**: 避免了 RocksDB 的 pthread 锁错误
+- **一致性**: MDBX 和 RocksDB 使用相同的测试模式
+- **效率**: 数据只初始化一次，但连接按需创建
+
+### 运行基准测试
+
 ```bash
-./run.sh --benchmark --filter "Insert*"
-./run.sh --benchmark --filter "Query*"
-./run.sh --benchmark --filter "Range*"
+# 运行所有基准测试（仅 MDBX）
+./run.sh --benchmark
 
-# 如果需要比较 MDBX 和 RocksDB 性能
+# 包含 RocksDB 的完整性能对比
 ./run.sh --rocksdb --benchmark
+
+# 运行特定类型的测试
+./run.sh --benchmark --filter "MDBX*"
+./run.sh --benchmark --filter "*ExactMatch*"
+./run.sh --benchmark --filter "*Lookback*"
+
+# 自定义时间单位和输出格式
+./run.sh --benchmark --time-unit us --format json
 ```
 
 ## MDBX需求验证测试
