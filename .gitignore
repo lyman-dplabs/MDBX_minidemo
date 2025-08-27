@@ -13,3 +13,6 @@ build/
 # OS-specific
 .DS_Store
 Thumbs.db
+
+# CPM Cache
+.cpm_cache

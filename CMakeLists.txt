@@ -18,6 +18,9 @@ message(STATUS "Looking for dependencies...")
 # 引入 CPM.cmake
 include(cmake/CPM.cmake)
 
+# 配置CPM缓存以避免重复下载和编译
+set(CPM_SOURCE_CACHE ${CMAKE_CURRENT_SOURCE_DIR}/.cpm_cache)
+
 # MDBX 是默认必需的依赖，使用 CPM 拉源码编译
 message(STATUS "Setting up MDBX (required dependency)...")
 CPMAddPackage(
@@ -30,6 +33,11 @@ CPMAddPackage(
     "MDBX_ENABLE_TESTING OFF"
     "MDBX_ENABLE_EXAMPLES OFF"
     "MDBX_ENABLE_PROGRAMS OFF"
+    "MDBX_ALLOY_BUILD ON"
+    "MDBX_INSTALL_STATIC OFF"
+    "MDBX_TXN_CHECKOWNER ON"
+    "MDBX_ENV_CHECKPID ON"
+    "MDBX_DISABLE_GNU_SOURCE OFF"
 )
 
 # 确保 MDBX 添加成功
