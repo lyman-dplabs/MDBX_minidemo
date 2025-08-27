@@ -30,10 +30,14 @@ void assert_cursor_result(const CursorResult& result, bool should_exist,
         assert(result.done);
         if (!expected_key.empty()) {
             std::string actual_key{result.key.as_string()};
+            std::cout << "actual_key: " << actual_key << std::endl;
+            std::cout << "expected_key: " << expected_key << std::endl;
             assert(actual_key == expected_key);
         }
         if (!expected_value.empty()) {
             std::string actual_value{result.value.as_string()};
+            std::cout << "actual_value: " << actual_value << std::endl;
+            std::cout << "expected_value: " << expected_value << std::endl;
             assert(actual_value == expected_value);
         }
     } else {
@@ -43,6 +47,12 @@ void assert_cursor_result(const CursorResult& result, bool should_exist,
 
 void test_environment_and_config() {
     std::cout << "\n=== 测试环境配置和打开 ===" << std::endl;
+
+    std::filesystem::path db_dir = "/tmp/test_mdbx_comprehensive";
+    if (std::filesystem::exists(db_dir)) {
+        std::filesystem::remove_all(db_dir);
+        std::cout << "清理旧的测试数据库文件" << std::endl;
+    }
     
     // 测试 EnvConfig 结构体的所有配置选项
     EnvConfig config;
@@ -587,21 +597,25 @@ void test_pooled_cursor_features(::mdbx::env_managed& env) {
     RWTxnManaged txn2(env);
     cursor1.bind(txn2, config);
     
-    auto result = cursor1.find(str_to_slice("pool_key1"));
-    assert_cursor_result(result, true, "pool_key1", "pool_value1");
+    std::string pool_key1 = "pool_key1";
+    std::string pool_value1 = "pool_value1";
+    auto result = cursor1.find(str_to_slice(pool_key1));
+    assert_cursor_result(result, true, pool_key1, pool_value1);
     
     // 测试游标缓存
     const auto& cache = PooledCursor::handles_cache();
     std::cout << "测试游标句柄缓存访问成功" << std::endl;
     
     // 测试 put 操作（低级接口）
-    Slice value_slice = str_to_slice("new_pool_value");
-    MDBX_error_t put_result = cursor1.put(str_to_slice("pool_key2"), &value_slice, MDBX_UPSERT);
+    std::string pool_key2 = "pool_key2";
+    std::string new_pool_value_str = "new_pool_value";
+    Slice value_slice = str_to_slice(new_pool_value_str);
+    MDBX_error_t put_result = cursor1.put(str_to_slice(pool_key2), &value_slice, MDBX_UPSERT);
     assert(put_result == MDBX_SUCCESS);
     
     // 验证put结果
-    result = cursor1.find(str_to_slice("pool_key2"));
-    assert_cursor_result(result, true, "pool_key2", "new_pool_value");
+    result = cursor1.find(str_to_slice(pool_key2));
+    assert_cursor_result(result, true, pool_key2, new_pool_value_str);
     
     // 测试显式关闭
     cursor1.close();
