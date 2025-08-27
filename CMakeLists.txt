@@ -147,6 +147,14 @@ if(MDBX_FOUND)
     target_compile_definitions(test_mdbx_simple PRIVATE HAVE_MDBX=1)
 endif()
 
+# MDBX Demand Requirements test
+if(MDBX_FOUND)
+    add_executable(test_mdbx_demand test_mdbx_demand.cpp src/db/mdbx.cpp)
+    target_include_directories(test_mdbx_demand PRIVATE ${MDBX_INCLUDE_DIRS})
+    target_link_libraries(test_mdbx_demand PRIVATE mdbx-static)
+    target_compile_definitions(test_mdbx_demand PRIVATE HAVE_MDBX=1)
+endif()
+
 # --- Installation Rules (Optional) ---
 install(TARGETS mdbx_demo benchmark_runner
     RUNTIME DESTINATION bin

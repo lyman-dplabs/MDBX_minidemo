@@ -66,6 +66,7 @@ CLEAN_BUILD=false
 RUN_DEMO=false
 RUN_BENCHMARK=false
 RUN_TESTS=false
+RUN_MDBX_DEMAND_TEST=false
 VERBOSE=false
 PARALLEL_JOBS=$(nproc)
 
@@ -97,6 +98,7 @@ ${BOLD}RUN OPTIONS:${NC}
     --demo              Run the main demo application
     --benchmark         Run performance benchmarks
     --tests             Run unit tests (if available)
+    --test-demand       Run MDBX demand requirements test (requires MDBX)
 
 ${BOLD}BENCHMARK OPTIONS:${NC}
     --filter PATTERN    Benchmark filter pattern (default: "*")
@@ -155,6 +157,10 @@ parse_arguments() {
                 ;;
             --tests)
                 RUN_TESTS=true
+                shift
+                ;;
+            --test-demand)
+                RUN_MDBX_DEMAND_TEST=true
                 shift
                 ;;
             --jobs)
@@ -390,6 +396,9 @@ run_tests() {
     if [[ -x "${BUILD_DIR}/test_mdbx_simple" ]]; then
         test_files+=("${BUILD_DIR}/test_mdbx_simple")
     fi
+    if [[ -x "${BUILD_DIR}/test_mdbx_demand" ]]; then
+        test_files+=("${BUILD_DIR}/test_mdbx_demand")
+    fi
     
     if [[ ${#test_files[@]} -eq 0 ]]; then
         log_warning "No test executables found"
@@ -410,6 +419,30 @@ run_tests() {
     done
     
     log_success "All tests completed"
+}
+
+run_mdbx_demand_test() {
+    log_step "Running MDBX demand requirements test"
+    
+    if [[ ! -x "${BUILD_DIR}/test_mdbx_demand" ]]; then
+        log_error "MDBX demand test executable not found. Build with --mdbx first."
+        return 1
+    fi
+    
+    log_substep "Running comprehensive MDBX functionality tests..."
+    echo
+    
+    cd "${BUILD_DIR}"
+    if ./test_mdbx_demand; then
+        cd "${PROJECT_ROOT}"
+        echo
+        log_success "MDBX demand test passed"
+    else
+        cd "${PROJECT_ROOT}"
+        echo
+        log_error "MDBX demand test failed"
+        return 1
+    fi
 }
 
 # =============================================================================
@@ -434,12 +467,13 @@ print_summary() {
     log_substep "Build Type: ${BUILD_TYPE}"
     log_substep "Parallel Jobs: ${PARALLEL_JOBS}"
     
-    if [[ "${RUN_DEMO}" == "true" ]] || [[ "${RUN_BENCHMARK}" == "true" ]] || [[ "${RUN_TESTS}" == "true" ]]; then
+    if [[ "${RUN_DEMO}" == "true" ]] || [[ "${RUN_BENCHMARK}" == "true" ]] || [[ "${RUN_TESTS}" == "true" ]] || [[ "${RUN_MDBX_DEMAND_TEST}" == "true" ]]; then
         echo
         log_step "Execution Plan"
         [[ "${RUN_DEMO}" == "true" ]] && log_substep "${GREEN}✓${NC} Run demo application"
         [[ "${RUN_BENCHMARK}" == "true" ]] && log_substep "${GREEN}✓${NC} Run benchmarks (filter: ${BENCHMARK_FILTER})"
         [[ "${RUN_TESTS}" == "true" ]] && log_substep "${GREEN}✓${NC} Run tests"
+        [[ "${RUN_MDBX_DEMAND_TEST}" == "true" ]] && log_substep "${GREEN}✓${NC} Run MDBX demand requirements test"
     fi
     echo
 }
@@ -478,6 +512,11 @@ main() {
         executed_something=true
     fi
     
+    if [[ "${RUN_MDBX_DEMAND_TEST}" == "true" ]]; then
+        run_mdbx_demand_test
+        executed_something=true
+    fi
+    
     # Final message
     echo
     if [[ "${executed_something}" == "true" ]]; then
@@ -486,9 +525,10 @@ main() {
         log_success "Build completed successfully! 🎉"
         echo
         log_info "To run the applications:"
-        log_info "  Demo:      $0 --demo"
-        log_info "  Benchmark: $0 --benchmark"
-        log_info "  Tests:     $0 --tests"
+        log_info "  Demo:         $0 --demo"
+        log_info "  Benchmark:    $0 --benchmark"
+        log_info "  Tests:        $0 --tests"
+        log_info "  MDBX Demand:  $0 --mdbx --test-demand"
         log_info ""
         log_info "Use --help for more options."
     fi
