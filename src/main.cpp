@@ -1,8 +1,8 @@
 #include "core/query_engine.hpp"
-#if HAVE_MDBX
 #include "db/mdbx_impl.hpp"
-#endif
+#if HAVE_ROCKSDB
 #include "db/rocksdb_impl.hpp"
+#endif
 
 #include <fmt/core.h>
 #include <filesystem>
@@ -30,7 +30,6 @@ int main() {
         // --- Setup ---
         fmt::print("--- DATABASE DEMO ---\n");
 
-#if HAVE_MDBX
         fmt::print("Testing MDBX implementation...\n");
         {
             auto db = std::make_unique<MdbxImpl>(mdbx_db_path);
@@ -53,10 +52,8 @@ int main() {
             perform_query(engine, "vitalik", 0);
             perform_query(engine, "satoshi", 100);
         }
-#else
-        fmt::print("MDBX not available, skipping MDBX tests...\n");
-#endif
 
+#if HAVE_ROCKSDB
         fmt::print("Testing RocksDB implementation...\n");
         {
             auto db = std::make_unique<RocksDbImpl>(rocksdb_db_path);
@@ -79,6 +76,9 @@ int main() {
             perform_query(engine, "vitalik", 0);
             perform_query(engine, "satoshi", 100);
         }
+#else
+        fmt::print("RocksDB not available, skipping RocksDB tests...\n");
+#endif
 
     } catch (const std::exception& e) {
         fmt::print(stderr, "An error occurred: {}\n", e.what());

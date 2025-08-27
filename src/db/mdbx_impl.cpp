@@ -82,14 +82,24 @@ auto MdbxImpl::get_state(std::string_view account_name, uint64_t block_number)
         result = cursor.to_last(/*throw_notfound=*/false);
     }
 
-    if (!result.done) {
+    if (result.done) {
         // 4. Validate that the found key belongs to the correct account.
         std::string_view found_key_sv{reinterpret_cast<const char*>(result.key.data()), result.key.size()};
 
-        if (found_key_sv.starts_with(account_name)) {
-            // 5. If it matches, return the value.
-            const auto* value_ptr = static_cast<const std::byte*>(result.value.data());
-            return std::vector<std::byte>{value_ptr, value_ptr + result.value.size()};
+        if (found_key_sv.starts_with(account_name) && 
+            found_key_sv.length() >= account_name.length() + sizeof(uint64_t)) {
+            
+            // 5. Extract the block number from the found key and verify it's <= requested block
+            const auto* block_bytes = reinterpret_cast<const std::byte*>(
+                found_key_sv.data() + account_name.length());
+            auto found_block = utils::from_big_endian_bytes(
+                std::span<const std::byte, 8>{block_bytes, 8});
+            
+            if (found_block <= block_number) {
+                // 6. If it matches, return the value.
+                const auto* value_ptr = static_cast<const std::byte*>(result.value.data());
+                return std::vector<std::byte>{value_ptr, value_ptr + result.value.size()};
+            }
         }
     }
 

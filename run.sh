@@ -60,7 +60,7 @@ readonly BUILD_DIR="${PROJECT_ROOT}/build"
 readonly VCPKG_DIR="${PROJECT_ROOT}/third_party/vcpkg"
 
 # Build configuration
-ENABLE_MDBX=false
+ENABLE_ROCKSDB=false
 BUILD_TYPE="Debug"
 CLEAN_BUILD=false
 RUN_DEMO=false
@@ -88,7 +88,7 @@ ${BOLD}USAGE:${NC}
     $0 [OPTIONS]
 
 ${BOLD}BUILD OPTIONS:${NC}
-    --mdbx              Enable MDBX support (requires libmdbx installation)
+    --rocksdb           Enable RocksDB support (optional)
     --release           Build in Release mode (default: Debug)
     --clean             Clean build directory before building
     --jobs N            Number of parallel build jobs (default: $(nproc))
@@ -98,7 +98,7 @@ ${BOLD}RUN OPTIONS:${NC}
     --demo              Run the main demo application
     --benchmark         Run performance benchmarks
     --tests             Run unit tests (if available)
-    --test-demand       Run MDBX demand requirements test (requires MDBX)
+    --test-demand       Run MDBX demand requirements test
 
 ${BOLD}BENCHMARK OPTIONS:${NC}
     --filter PATTERN    Benchmark filter pattern (default: "*")
@@ -107,23 +107,23 @@ ${BOLD}BENCHMARK OPTIONS:${NC}
     --format FORMAT     Output format: console, json, csv (default: console)
 
 ${BOLD}EXAMPLES:${NC}
-    # Basic build and run demo with RocksDB only
+    # Basic build and run demo with MDBX only (default)
     $0 --demo
 
-    # Build with MDBX support and run benchmarks
-    $0 --mdbx --benchmark
+    # Build with RocksDB support and run benchmarks
+    $0 --rocksdb --benchmark
 
     # Clean release build and run specific benchmarks
-    $0 --clean --release --benchmark --filter "RocksDB*"
+    $0 --clean --release --benchmark --filter "MDBX*"
 
-    # Build with MDBX and run everything
-    $0 --mdbx --demo --benchmark --tests
+    # Build with RocksDB and run everything
+    $0 --rocksdb --demo --benchmark --tests
 
 ${BOLD}REQUIREMENTS:${NC}
     - CMake 3.21+
     - C++23 compatible compiler (GCC 12+, Clang 14+)
     - vcpkg (automatically set up as submodule)
-    - libmdbx (optional, for --mdbx flag)
+    - MDBX (automatically downloaded and built via CPM)
 
 EOF
 }
@@ -135,8 +135,8 @@ EOF
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --mdbx)
-                ENABLE_MDBX=true
+            --rocksdb)
+                ENABLE_ROCKSDB=true
                 shift
                 ;;
             --release)
@@ -231,17 +231,14 @@ check_dependencies() {
         exit 1
     fi
     
-    # Check MDBX if requested
-    if [[ "${ENABLE_MDBX}" == "true" ]]; then
-        log_substep "Checking for MDBX..."
-        if pkg-config --exists libmdbx; then
-            local mdbx_version
-            mdbx_version=$(pkg-config --modversion libmdbx 2>/dev/null || echo "unknown")
-            log_substep "Found libmdbx version: ${mdbx_version}"
-        else
-            log_warning "libmdbx not found via pkg-config"
-            log_warning "MDBX functionality may be disabled during build"
-        fi
+    # MDBX 是默认启用的，会通过CPM自动下载构建
+    log_substep "MDBX support: ${GREEN}ENABLED${NC} (via CPM)"
+    
+    # Check RocksDB if requested
+    if [[ "${ENABLE_ROCKSDB}" == "true" ]]; then
+        log_substep "RocksDB support: ${GREEN}ENABLED${NC}"
+    else
+        log_substep "RocksDB support: ${YELLOW}DISABLED${NC}"
     fi
     
     log_success "Dependency check completed"
@@ -287,11 +284,15 @@ configure_build() {
         "-DCMAKE_TOOLCHAIN_FILE=${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake"
     )
     
-    if [[ "${ENABLE_MDBX}" == "true" ]]; then
-        log_substep "MDBX support: ${GREEN}ENABLED${NC}"
+    if [[ "${ENABLE_ROCKSDB}" == "true" ]]; then
+        cmake_args+=("-DENABLE_ROCKSDB=ON")
+        log_substep "RocksDB support: ${GREEN}ENABLED${NC}"
     else
-        log_substep "MDBX support: ${YELLOW}DISABLED${NC}"
+        cmake_args+=("-DENABLE_ROCKSDB=OFF")
+        log_substep "RocksDB support: ${YELLOW}DISABLED${NC}"
     fi
+    
+    log_substep "MDBX support: ${GREEN}ENABLED${NC} (default)"
     
     log_substep "Build type: ${BUILD_TYPE}"
     log_substep "Toolchain: vcpkg"
@@ -390,7 +391,7 @@ run_tests() {
     if [[ -x "${BUILD_DIR}/test_endian" ]]; then
         test_files+=("${BUILD_DIR}/test_endian")
     fi
-    if [[ -x "${BUILD_DIR}/test_rocksdb" ]]; then
+    if [[ -x "${BUILD_DIR}/test_rocksdb" && "${ENABLE_ROCKSDB}" == "true" ]]; then
         test_files+=("${BUILD_DIR}/test_rocksdb")
     fi
     if [[ -x "${BUILD_DIR}/test_mdbx_simple" ]]; then
@@ -425,7 +426,7 @@ run_mdbx_demand_test() {
     log_step "Running MDBX demand requirements test"
     
     if [[ ! -x "${BUILD_DIR}/test_mdbx_demand" ]]; then
-        log_error "MDBX demand test executable not found. Build with --mdbx first."
+        log_error "MDBX demand test executable not found. Build the project first."
         return 1
     fi
     
@@ -463,7 +464,8 @@ EOF
 print_summary() {
     echo
     log_step "Build Summary"
-    log_substep "MDBX Support: $([ "${ENABLE_MDBX}" == "true" ] && echo "${GREEN}Enabled${NC}" || echo "${YELLOW}Disabled${NC}")"
+    log_substep "MDBX Support: ${GREEN}Enabled${NC} (default)"
+    log_substep "RocksDB Support: $([ "${ENABLE_ROCKSDB}" == "true" ] && echo "${GREEN}Enabled${NC}" || echo "${YELLOW}Disabled${NC}")"
     log_substep "Build Type: ${BUILD_TYPE}"
     log_substep "Parallel Jobs: ${PARALLEL_JOBS}"
     
@@ -528,7 +530,7 @@ main() {
         log_info "  Demo:         $0 --demo"
         log_info "  Benchmark:    $0 --benchmark"
         log_info "  Tests:        $0 --tests"
-        log_info "  MDBX Demand:  $0 --mdbx --test-demand"
+        log_info "  MDBX Demand:  $0 --test-demand"
         log_info ""
         log_info "Use --help for more options."
     fi

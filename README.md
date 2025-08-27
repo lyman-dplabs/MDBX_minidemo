@@ -1,12 +1,12 @@
 # MDBX Blockchain State Read Accelerator
 
-这是一个用于区块链状态读取加速的演示项目，支持 RocksDB 和 MDBX 两种数据库后端。
+这是一个用于区块链状态读取加速的演示项目，以 MDBX 为主要后端，可选支持 RocksDB。
 
 ## 项目概述
 
 本项目实现了一个区块链状态查询引擎，支持：
-- **RocksDB**: 高性能的键值存储数据库
-- **MDBX**: 轻量级的嵌入式数据库（可选）
+- **MDBX**: 轻量级的嵌入式数据库（默认必需）
+- **RocksDB**: 高性能的键值存储数据库（可选）
 - 性能基准测试
 - 单元测试
 
@@ -17,7 +17,7 @@
 - **CMake 3.21+**
 - **C++23 兼容的编译器** (GCC 12+, Clang 14+)
 - **Git** (用于管理子模块)
-- **libmdbx** (可选，仅在使用 MDBX 功能时需要)
+- **MDBX** (通过 CPM 自动下载构建，无需手动安装)
 
 ### 安装依赖
 
@@ -27,8 +27,8 @@
 sudo apt update
 sudo apt install cmake build-essential git
 
-# 安装 MDBX (可选)
-sudo apt install libmdbx-dev
+# 安装 RocksDB (可选，仅在使用 --rocksdb 选项时需要)
+sudo apt install librocksdb-dev
 ```
 
 #### CentOS/RHEL
@@ -36,8 +36,8 @@ sudo apt install libmdbx-dev
 # 安装基础依赖
 sudo yum install cmake gcc-c++ git
 
-# 安装 MDBX (可选)
-sudo yum install libmdbx-devel
+# 安装 RocksDB (可选，仅在使用 --rocksdb 选项时需要)
+sudo yum install rocksdb-devel
 ```
 
 ### 构建和运行
@@ -47,7 +47,7 @@ sudo yum install libmdbx-devel
 #### 基本用法
 
 ```bash
-# 构建项目（仅 RocksDB）
+# 构建项目（默认仅 MDBX）
 ./run.sh
 
 # 构建并运行演示程序
@@ -60,7 +60,7 @@ sudo yum install libmdbx-devel
 ./run.sh --tests
 
 # 构建并运行MDBX需求验证测试
-./run.sh --mdbx --test-demand
+./run.sh --test-demand
 
 # 构建并运行所有组件
 ./run.sh --demo --benchmark --tests
@@ -69,8 +69,8 @@ sudo yum install libmdbx-devel
 #### 高级选项
 
 ```bash
-# 启用 MDBX 支持
-./run.sh --mdbx --demo
+# 启用 RocksDB 支持（可选）
+./run.sh --rocksdb --demo
 
 # 发布模式构建
 ./run.sh --release --benchmark
@@ -89,7 +89,7 @@ sudo yum install libmdbx-devel
 
 ```bash
 # 运行特定模式的基准测试
-./run.sh --benchmark --filter "RocksDB*"
+./run.sh --benchmark --filter "MDBX*"
 
 # 自定义时间单位和最小运行时间
 ./run.sh --benchmark --time-unit us --min-time 1s
@@ -104,11 +104,13 @@ sudo yum install libmdbx-devel
 
 | 选项 | 描述 | 默认值 |
 |------|------|--------|
-| `--mdbx` | 启用 MDBX 支持 | 禁用 |
+| `--rocksdb` | 启用 RocksDB 支持 | 禁用 |
 | `--release` | 发布模式构建 | Debug |
 | `--clean` | 清理构建目录 | 否 |
 | `--jobs N` | 并行构建任务数 | CPU 核心数 |
 | `--verbose` | 详细输出 | 否 |
+
+**注意**: MDBX 是默认启用的，无需额外选项。
 
 ### 运行选项
 
@@ -162,15 +164,24 @@ mdbx_demo/
 - 检查 CMake 版本是否支持 (需要 3.21+)
 - 如果问题持续，可以手动下载 CPM.cmake 文件
 
-### 2. MDBX 依赖问题
+### 2. RocksDB 依赖问题
 
-**问题**: 使用 `--mdbx` 选项时构建失败。
+**问题**: 使用 `--rocksdb` 选项时构建失败。
 
 **解决方案**:
-- 安装系统级 MDBX 库：`sudo apt install libmdbx-dev`
-- 或者让脚本通过 CPM 自动下载编译 MDBX
+- 安装系统级 RocksDB 库：`sudo apt install librocksdb-dev`
+- 或者通过 vcpkg 管理 RocksDB 依赖
 
-### 3. vcpkg 相关问题
+### 3. MDBX 构建问题
+
+**问题**: MDBX 通过 CPM 下载或编译失败。
+
+**解决方案**:
+- 确保网络连接正常，可以访问 GitHub
+- 检查 CMake 版本是否支持 CPM (需要 3.21+)
+- 清理构建目录后重试：`./run.sh --clean --demo`
+
+### 4. vcpkg 相关问题
 
 **问题**: vcpkg 依赖安装失败。
 
@@ -179,7 +190,7 @@ mdbx_demo/
 - 检查 `vcpkg.json` 文件格式是否正确
 - 手动运行 `./third_party/vcpkg/vcpkg install`
 
-### 4. 编译器版本问题
+### 5. 编译器版本问题
 
 **问题**: 编译器不支持 C++23 特性。
 
@@ -223,6 +234,9 @@ mdbx_demo/
 ./run.sh --benchmark --filter "Insert*"
 ./run.sh --benchmark --filter "Query*"
 ./run.sh --benchmark --filter "Range*"
+
+# 如果需要比较 MDBX 和 RocksDB 性能
+./run.sh --rocksdb --benchmark
 ```
 
 ## MDBX需求验证测试
@@ -266,10 +280,10 @@ mdbx_demo/
 
 ```bash
 # 运行完整的MDBX需求验证测试
-./run.sh --mdbx --test-demand
+./run.sh --test-demand
 
 # 包含在所有测试中
-./run.sh --mdbx --tests
+./run.sh --tests
 ```
 
 该测试确保MDBX封装API满足所有指定的功能需求，为区块链状态存储提供可靠的数据库操作接口。

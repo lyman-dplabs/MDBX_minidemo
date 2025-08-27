@@ -15,19 +15,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Example: cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=[path-to-vcpkg]/scripts/buildsystems/vcpkg.cmake
 message(STATUS "Looking for dependencies...")
 
-# Try to find MDBX - could be system installed or vcpkg
-find_package(PkgConfig QUIET)
-if(PKG_CONFIG_FOUND)
-    pkg_check_modules(MDBX libmdbx)
-endif()
-
 # 引入 CPM.cmake
 include(cmake/CPM.cmake)
 
-# RocksDB / Boost / OpenSSL 通过 vcpkg.json 管理
-# 这里不用手写 find_package，vcpkg 会自动集成
-
-# MDBX 使用 CPM 拉源码编译
+# MDBX 是默认必需的依赖，使用 CPM 拉源码编译
+message(STATUS "Setting up MDBX (required dependency)...")
 CPMAddPackage(
   NAME libmdbx
   GITHUB_REPOSITORY erthink/libmdbx
@@ -40,7 +32,7 @@ CPMAddPackage(
     "MDBX_ENABLE_PROGRAMS OFF"
 )
 
-# 设置 MDBX 为已找到
+# 确保 MDBX 添加成功
 if(libmdbx_ADDED)
     set(MDBX_FOUND TRUE)
     set(MDBX_LIBRARIES libmdbx)
@@ -48,24 +40,17 @@ if(libmdbx_ADDED)
     message(STATUS "MDBX found via CPM: ${libmdbx_SOURCE_DIR}")
     message(STATUS "MDBX build dir: ${libmdbx_BINARY_DIR}")
 else()
-    message(WARNING "Failed to add MDBX via CPM")
+    message(FATAL_ERROR "Failed to add MDBX via CPM")
 endif()
 
-if(NOT MDBX_FOUND)
-    # Try system installation
-    find_path(MDBX_INCLUDE_DIR mdbx.h++)
-    find_library(MDBX_LIBRARY mdbx-static)
-    if(NOT MDBX_LIBRARY)
-        find_library(MDBX_LIBRARY mdbx)
-    endif()
-    if(MDBX_INCLUDE_DIR AND MDBX_LIBRARY)
-        set(MDBX_FOUND TRUE)
-        set(MDBX_LIBRARIES ${MDBX_LIBRARY})
-        set(MDBX_INCLUDE_DIRS ${MDBX_INCLUDE_DIR})
-    endif()
+# RocksDB 是可选依赖
+option(ENABLE_ROCKSDB "Enable RocksDB support" OFF)
+if(ENABLE_ROCKSDB)
+    find_package(RocksDB CONFIG REQUIRED)
+    message(STATUS "RocksDB support enabled")
+else()
+    message(STATUS "RocksDB support disabled")
 endif()
-
-find_package(RocksDB CONFIG REQUIRED)
 find_package(benchmark CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
@@ -76,13 +61,13 @@ message(STATUS "All dependencies found.")
 # shared between the main demo and the benchmark runner.
 set(CORE_LOGIC_SOURCES
     src/core/query_engine.cpp
-    src/db/rocksdb_impl.cpp
+    src/db/mdbx_impl.cpp
 )
 
-if(MDBX_FOUND)
-    list(APPEND CORE_LOGIC_SOURCES src/db/mdbx_impl.cpp)
+if(ENABLE_ROCKSDB)
+    list(APPEND CORE_LOGIC_SOURCES src/db/rocksdb_impl.cpp)
 else()
-    list(APPEND CORE_LOGIC_SOURCES src/db/mdbx_stub.cpp)
+    list(APPEND CORE_LOGIC_SOURCES src/db/rocksdb_stub.cpp)
 endif()
 
 add_library(core_logic ${CORE_LOGIC_SOURCES})
@@ -95,19 +80,22 @@ target_include_directories(core_logic PUBLIC
 
 # Link the required libraries to our core_logic library.
 target_link_libraries(core_logic PUBLIC
-    RocksDB::rocksdb
     fmt::fmt
 )
 
-# Add MDBX if found
-if(MDBX_FOUND)
-    target_include_directories(core_logic PUBLIC ${MDBX_INCLUDE_DIRS})
-    target_link_libraries(core_logic PUBLIC mdbx-static)
-    target_compile_definitions(core_logic PUBLIC HAVE_MDBX=1)
-    message(STATUS "MDBX linked to core_logic")
+# MDBX 是必需的，总是链接
+target_include_directories(core_logic PUBLIC ${MDBX_INCLUDE_DIRS})
+target_link_libraries(core_logic PUBLIC mdbx-static)
+message(STATUS "MDBX linked to core_logic")
+
+# 条件链接 RocksDB
+if(ENABLE_ROCKSDB)
+    target_link_libraries(core_logic PUBLIC RocksDB::rocksdb)
+    target_compile_definitions(core_logic PUBLIC HAVE_ROCKSDB=1)
+    message(STATUS "RocksDB linked to core_logic")
 else()
-    message(WARNING "MDBX not found, MDBX functionality will be disabled")
-    target_compile_definitions(core_logic PUBLIC HAVE_MDBX=0)
+    target_compile_definitions(core_logic PUBLIC HAVE_ROCKSDB=0)
+    message(STATUS "RocksDB support disabled in core_logic")
 endif()
 
 # --- Main Demo Executable ---
@@ -134,26 +122,21 @@ add_executable(test_endian test_endian.cpp)
 target_include_directories(test_endian PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(test_endian PRIVATE fmt::fmt)
 
-# RocksDB test
-add_executable(test_rocksdb test_rocksdb.cpp)
-target_include_directories(test_rocksdb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(test_rocksdb PRIVATE core_logic)
-
-# Simple MDBX test
-if(MDBX_FOUND)
-    add_executable(test_mdbx_simple test_mdbx_simple.cpp src/db/mdbx.cpp)
-    target_include_directories(test_mdbx_simple PRIVATE ${MDBX_INCLUDE_DIRS})
-    target_link_libraries(test_mdbx_simple PRIVATE mdbx-static)
-    target_compile_definitions(test_mdbx_simple PRIVATE HAVE_MDBX=1)
+# RocksDB test (optional)
+if(ENABLE_ROCKSDB)
+    add_executable(test_rocksdb test_rocksdb.cpp)
+    target_include_directories(test_rocksdb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(test_rocksdb PRIVATE core_logic)
 endif()
 
-# MDBX Demand Requirements test
-if(MDBX_FOUND)
-    add_executable(test_mdbx_demand test_mdbx_demand.cpp src/db/mdbx.cpp)
-    target_include_directories(test_mdbx_demand PRIVATE ${MDBX_INCLUDE_DIRS})
-    target_link_libraries(test_mdbx_demand PRIVATE mdbx-static)
-    target_compile_definitions(test_mdbx_demand PRIVATE HAVE_MDBX=1)
-endif()
+# MDBX tests (always available since MDBX is required)
+add_executable(test_mdbx_simple test_mdbx_simple.cpp src/db/mdbx.cpp)
+target_include_directories(test_mdbx_simple PRIVATE ${MDBX_INCLUDE_DIRS})
+target_link_libraries(test_mdbx_simple PRIVATE mdbx-static)
+
+add_executable(test_mdbx_demand test_mdbx_demand.cpp src/db/mdbx.cpp)
+target_include_directories(test_mdbx_demand PRIVATE ${MDBX_INCLUDE_DIRS})
+target_link_libraries(test_mdbx_demand PRIVATE mdbx-static)
 
 # --- Installation Rules (Optional) ---
 install(TARGETS mdbx_demo benchmark_runner

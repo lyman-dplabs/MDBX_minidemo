@@ -1,8 +1,8 @@
 #include "core/query_engine.hpp"
-#if HAVE_MDBX
 #include "db/mdbx_impl.hpp"
-#endif
+#if HAVE_ROCKSDB
 #include "db/rocksdb_impl.hpp"
+#endif
 
 #include <benchmark/benchmark.h>
 #include <fmt/core.h>
@@ -72,23 +72,23 @@ public:
         test_data_ = BenchmarkDataGenerator::generate_test_data();
 
         // Initialize databases
-#if HAVE_MDBX
         mdbx_engine_ = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
         populate_database(*mdbx_engine_);
-#endif
 
+#if HAVE_ROCKSDB
         rocksdb_engine_ = std::make_unique<QueryEngine>(std::make_unique<RocksDbImpl>(rocksdb_path_));
         populate_database(*rocksdb_engine_);
+#endif
 
         // Prepare query data
         prepare_query_data();
     }
 
     void TearDown(const benchmark::State& state) override {
-#if HAVE_MDBX
         mdbx_engine_.reset();
-#endif
+#if HAVE_ROCKSDB
         rocksdb_engine_.reset();
+#endif
         cleanup_databases();
     }
 
@@ -136,14 +136,13 @@ protected:
     const std::filesystem::path rocksdb_path_ = std::filesystem::temp_directory_path() / "benchmark_rocksdb";
 
     // Database instances
-#if HAVE_MDBX
     std::unique_ptr<QueryEngine> mdbx_engine_;
-#endif
+#if HAVE_ROCKSDB
     std::unique_ptr<QueryEngine> rocksdb_engine_;
+#endif
 };
 
 // --- MDBX Benchmarks ---
-#if HAVE_MDBX
 BENCHMARK_F(DatabaseBenchmark, MDBX_ExactMatch)(benchmark::State& state) {
     size_t query_idx = 0;
     for (auto _ : state) {
@@ -167,9 +166,9 @@ BENCHMARK_F(DatabaseBenchmark, MDBX_Lookback)(benchmark::State& state) {
 
     state.SetItemsProcessed(state.iterations());
 }
-#endif
 
 // --- RocksDB Benchmarks ---
+#if HAVE_ROCKSDB
 BENCHMARK_F(DatabaseBenchmark, RocksDB_ExactMatch)(benchmark::State& state) {
     size_t query_idx = 0;
     for (auto _ : state) {
@@ -193,6 +192,7 @@ BENCHMARK_F(DatabaseBenchmark, RocksDB_Lookback)(benchmark::State& state) {
 
     state.SetItemsProcessed(state.iterations());
 }
+#endif
 
 // Run the benchmark
 BENCHMARK_MAIN();
