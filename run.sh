@@ -76,6 +76,11 @@ BENCHMARK_TIME_UNIT="ms"
 BENCHMARK_MIN_TIME="0.1s"
 BENCHMARK_FORMAT="console"
 
+# Benchmark data configuration (can be overridden by environment variables or command line)
+BENCH_NUM_ACCOUNTS="10"
+BENCH_NUM_BLOCKS_PER_ACCOUNT="100"
+BENCH_MAX_BLOCK_NUMBER="10000"
+
 # =============================================================================
 # Help Function
 # =============================================================================
@@ -105,6 +110,11 @@ show_help() {
     echo -e "    --min-time TIME     Minimum time per benchmark (default: 0.1s)"
     echo -e "    --format FORMAT     Output format: console, json, csv (default: console)"
     echo
+    echo -e "${BOLD}BENCHMARK DATA OPTIONS:${NC}"
+    echo -e "    --accounts NUM      Number of accounts for benchmark (default: 10)"
+    echo -e "    --blocks NUM        Number of blocks per account (default: 100)"
+    echo -e "    --max-block NUM     Maximum block number (default: 10000)"
+    echo
     echo -e "${BOLD}EXAMPLES:${NC}"
     echo -e "    # Basic build and run demo with MDBX only (default)"
     echo -e "    $0 --demo"
@@ -114,6 +124,9 @@ show_help() {
     echo
     echo -e "    # Clean release build and run specific benchmarks"
     echo -e "    $0 --clean --release --benchmark --filter \"MDBX*\""
+    echo
+    echo -e "    # Run benchmark with custom data size"
+    echo -e "    $0 --benchmark --accounts 50 --blocks 200 --max-block 50000"
     echo
     echo -e "    # Build with RocksDB and run everything"
     echo -e "    $0 --rocksdb --demo --benchmark --tests"
@@ -183,6 +196,18 @@ parse_arguments() {
                 ;;
             --format)
                 BENCHMARK_FORMAT="$2"
+                shift 2
+                ;;
+            --accounts)
+                BENCH_NUM_ACCOUNTS="$2"
+                shift 2
+                ;;
+            --blocks)
+                BENCH_NUM_BLOCKS_PER_ACCOUNT="$2"
+                shift 2
+                ;;
+            --max-block)
+                BENCH_MAX_BLOCK_NUMBER="$2"
                 shift 2
                 ;;
             --help|-h)
@@ -360,8 +385,11 @@ run_benchmarks() {
         return 1
     fi
     
-    local benchmark_args=(
-        "--benchmark_filter=${BENCHMARK_FILTER}"
+    local benchmark_args=()
+    if [[ "${BENCHMARK_FILTER}" != "*" ]]; then
+        benchmark_args+=("--benchmark_filter=${BENCHMARK_FILTER}")
+    fi
+    benchmark_args+=(
         "--benchmark_time_unit=${BENCHMARK_TIME_UNIT}"
         "--benchmark_min_time=${BENCHMARK_MIN_TIME}"
         "--benchmark_format=${BENCHMARK_FORMAT}"
@@ -374,6 +402,14 @@ run_benchmarks() {
     echo
     
     cd "${BUILD_DIR}"
+    # Set environment variables for benchmark data configuration
+    export BENCH_NUM_ACCOUNTS="${BENCH_NUM_ACCOUNTS}"
+    export BENCH_NUM_BLOCKS_PER_ACCOUNT="${BENCH_NUM_BLOCKS_PER_ACCOUNT}"
+    export BENCH_MAX_BLOCK_NUMBER="${BENCH_MAX_BLOCK_NUMBER}"
+    
+    log_substep "Data config: ${BENCH_NUM_ACCOUNTS} accounts, ${BENCH_NUM_BLOCKS_PER_ACCOUNT} blocks/account, max block ${BENCH_MAX_BLOCK_NUMBER}"
+    echo
+    
     ./benchmark_runner "${benchmark_args[@]}"
     cd "${PROJECT_ROOT}"
     

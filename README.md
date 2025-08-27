@@ -96,6 +96,15 @@ sudo yum install rocksdb-devel
 
 # 输出为 JSON 格式
 ./run.sh --benchmark --format json
+
+# 自定义基准测试数据量
+./run.sh --benchmark --accounts 50 --blocks 200 --max-block 50000
+
+# 使用环境变量配置数据量
+export BENCH_NUM_ACCOUNTS=20
+export BENCH_NUM_BLOCKS_PER_ACCOUNT=500
+export BENCH_MAX_BLOCK_NUMBER=100000
+./run.sh --benchmark
 ```
 
 ## 脚本选项详解
@@ -129,6 +138,19 @@ sudo yum install rocksdb-devel
 | `--time-unit UNIT` | 时间单位 (ns/us/ms/s) | ms |
 | `--min-time TIME` | 最小运行时间 | 0.1s |
 | `--format FORMAT` | 输出格式 (console/json/csv) | console |
+
+### 基准测试数据配置
+
+| 选项 | 描述 | 默认值 | 环境变量 |
+|------|------|--------|----------|
+| `--accounts NUM` | 测试账户数量 | 10 | `BENCH_NUM_ACCOUNTS` |
+| `--blocks NUM` | 每个账户的区块数量 | 100 | `BENCH_NUM_BLOCKS_PER_ACCOUNT` |
+| `--max-block NUM` | 最大区块号 | 10000 | `BENCH_MAX_BLOCK_NUMBER` |
+
+**注意**: 增加数据量会显著增加基准测试的初始化时间。建议根据测试目标调整这些参数：
+- **快速测试**: 使用默认值 (10账户 × 100区块 = 1,000条记录)
+- **中等规模**: `--accounts 50 --blocks 200` (10,000条记录)
+- **大规模测试**: `--accounts 100 --blocks 1000` (100,000条记录)
 
 ## 项目结构
 

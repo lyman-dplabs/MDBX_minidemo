@@ -13,11 +13,35 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <cstdlib>
+#include <mutex>
 
 // --- Test Data Configuration ---
-constexpr size_t NUM_ACCOUNTS = 100;
-constexpr size_t NUM_BLOCKS_PER_ACCOUNT = 1000;
-constexpr size_t MAX_BLOCK_NUMBER = 100000;
+// Default values (can be overridden by environment variables or command line flags)
+size_t get_num_accounts() {
+    if (const char* env_val = std::getenv("BENCH_NUM_ACCOUNTS")) {
+        return std::stoul(env_val);
+    }
+    return 10;
+}
+
+size_t get_num_blocks_per_account() {
+    if (const char* env_val = std::getenv("BENCH_NUM_BLOCKS_PER_ACCOUNT")) {
+        return std::stoul(env_val);
+    }
+    return 100;
+}
+
+uint64_t get_max_block_number() {
+    if (const char* env_val = std::getenv("BENCH_MAX_BLOCK_NUMBER")) {
+        return std::stoull(env_val);
+    }
+    return 10000;
+}
+
+static const size_t NUM_ACCOUNTS = get_num_accounts();
+static const size_t NUM_BLOCKS_PER_ACCOUNT = get_num_blocks_per_account();
+static const uint64_t MAX_BLOCK_NUMBER = get_max_block_number();
 
 // --- Test Data Generation ---
 class BenchmarkDataGenerator {
@@ -29,21 +53,28 @@ public:
     };
 
     static auto generate_test_data() -> std::vector<AccountData> {
+        const size_t num_accounts = NUM_ACCOUNTS;
+        const size_t num_blocks_per_account = NUM_BLOCKS_PER_ACCOUNT;
+        const uint64_t max_block_number = MAX_BLOCK_NUMBER;
+        
+        fmt::print("Generating benchmark data with {} accounts, {} blocks per account, max block number {}\n",
+                   num_accounts, num_blocks_per_account, max_block_number);
+                   
         std::vector<AccountData> accounts;
-        accounts.reserve(NUM_ACCOUNTS);
+        accounts.reserve(num_accounts);
 
         std::mt19937 gen{42}; // Fixed seed for reproducibility
         std::uniform_int_distribution<uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
 
-        for (size_t i = 0; i < NUM_ACCOUNTS; ++i) {
+        for (size_t i = 0; i < num_accounts; ++i) {
             AccountData account;
             account.account_name = fmt::format("account_{:04d}", i);
-            account.block_numbers.reserve(NUM_BLOCKS_PER_ACCOUNT);
-            account.states.reserve(NUM_BLOCKS_PER_ACCOUNT);
+            account.block_numbers.reserve(num_blocks_per_account);
+            account.states.reserve(num_blocks_per_account);
 
             // Generate sorted block numbers
             std::set<uint64_t> unique_blocks;
-            while (unique_blocks.size() < NUM_BLOCKS_PER_ACCOUNT) {
+            while (unique_blocks.size() < num_blocks_per_account) {
                 unique_blocks.insert(block_dist(gen));
             }
 
@@ -65,26 +96,38 @@ public:
 class DatabaseBenchmark : public benchmark::Fixture {
 public:
     void SetUp(const benchmark::State& state) override {
-        // Clean up any existing databases
-        cleanup_databases();
-
-        // Generate test data
-        test_data_ = BenchmarkDataGenerator::generate_test_data();
-
-        // Initialize databases
-        mdbx_engine_ = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
-        populate_database(*mdbx_engine_);
-
+        // Generate test data if not already done
+        if (test_data_.empty()) {
+            test_data_ = BenchmarkDataGenerator::generate_test_data();
+        }
+        
+        // Initialize MDBX if not already done
+        if (!mdbx_engine_) {
+            cleanup_databases();
+            mdbx_engine_ = std::make_unique<QueryEngine>(std::make_unique<MdbxImpl>(mdbx_path_));
+            populate_database(*mdbx_engine_);
+        }
+        
 #if HAVE_ROCKSDB
-        rocksdb_engine_ = std::make_unique<QueryEngine>(std::make_unique<RocksDbImpl>(rocksdb_path_));
-        populate_database(*rocksdb_engine_);
+        // Initialize RocksDB if not already done
+        if (!rocksdb_engine_) {
+            rocksdb_engine_ = std::make_unique<QueryEngine>(std::make_unique<RocksDbImpl>(rocksdb_path_));
+            populate_database(*rocksdb_engine_);
+        }
 #endif
 
-        // Prepare query data
-        prepare_query_data();
+        // Prepare query data if not already done
+        if (exact_queries_.empty()) {
+            prepare_query_data();
+        }
     }
 
     void TearDown(const benchmark::State& state) override {
+        // Cleanup is handled by destructors
+    }
+    
+    ~DatabaseBenchmark() {
+        // Final cleanup
         mdbx_engine_.reset();
 #if HAVE_ROCKSDB
         rocksdb_engine_.reset();
@@ -102,9 +145,12 @@ protected:
     }
 
     void prepare_query_data() {
+        const size_t num_accounts = NUM_ACCOUNTS;
+        const uint64_t max_block_number = MAX_BLOCK_NUMBER;
+        
         std::mt19937 gen{123};
-        std::uniform_int_distribution<size_t> account_dist{0, NUM_ACCOUNTS - 1};
-        std::uniform_int_distribution<uint64_t> block_dist{1, MAX_BLOCK_NUMBER};
+        std::uniform_int_distribution<size_t> account_dist{0, num_accounts - 1};
+        std::uniform_int_distribution<uint64_t> block_dist{1, max_block_number};
 
         // Prepare exact match queries (query blocks that exist)
         for (size_t i = 0; i < 1000; ++i) {
@@ -126,19 +172,19 @@ protected:
         std::filesystem::remove_all(rocksdb_path_);
     }
 
-    // Test data
-    std::vector<BenchmarkDataGenerator::AccountData> test_data_;
-    std::vector<std::pair<std::string, uint64_t>> exact_queries_;
-    std::vector<std::pair<std::string, uint64_t>> lookback_queries_;
+    // Test data (shared across all tests using static members)
+    static inline std::vector<BenchmarkDataGenerator::AccountData> test_data_;
+    static inline std::vector<std::pair<std::string, uint64_t>> exact_queries_;
+    static inline std::vector<std::pair<std::string, uint64_t>> lookback_queries_;
 
-    // Database paths
-    const std::filesystem::path mdbx_path_ = std::filesystem::temp_directory_path() / "benchmark_mdbx";
-    const std::filesystem::path rocksdb_path_ = std::filesystem::temp_directory_path() / "benchmark_rocksdb";
+    // Database paths (shared across all tests)
+    static inline const std::filesystem::path mdbx_path_ = std::filesystem::temp_directory_path() / "benchmark_mdbx";
+    static inline const std::filesystem::path rocksdb_path_ = std::filesystem::temp_directory_path() / "benchmark_rocksdb";
 
-    // Database instances
-    std::unique_ptr<QueryEngine> mdbx_engine_;
+    // Database instances (shared across all tests)
+    static inline std::unique_ptr<QueryEngine> mdbx_engine_;
 #if HAVE_ROCKSDB
-    std::unique_ptr<QueryEngine> rocksdb_engine_;
+    static inline std::unique_ptr<QueryEngine> rocksdb_engine_;
 #endif
 };
 
