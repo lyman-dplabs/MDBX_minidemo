@@ -81,51 +81,49 @@ BENCHMARK_FORMAT="console"
 # =============================================================================
 
 show_help() {
-    cat << EOF
-${BOLD}MDBX Blockchain State Read Accelerator - Build & Run Script${NC}
-
-${BOLD}USAGE:${NC}
-    $0 [OPTIONS]
-
-${BOLD}BUILD OPTIONS:${NC}
-    --rocksdb           Enable RocksDB support (optional)
-    --release           Build in Release mode (default: Debug)
-    --clean             Clean build directory before building
-    --jobs N            Number of parallel build jobs (default: $(nproc))
-    --verbose           Enable verbose build output
-
-${BOLD}RUN OPTIONS:${NC}
-    --demo              Run the main demo application
-    --benchmark         Run performance benchmarks
-    --tests             Run unit tests (if available)
-    --test-demand       Run MDBX demand requirements test
-
-${BOLD}BENCHMARK OPTIONS:${NC}
-    --filter PATTERN    Benchmark filter pattern (default: "*")
-    --time-unit UNIT    Time unit: ns, us, ms, s (default: ms)
-    --min-time TIME     Minimum time per benchmark (default: 0.1s)
-    --format FORMAT     Output format: console, json, csv (default: console)
-
-${BOLD}EXAMPLES:${NC}
-    # Basic build and run demo with MDBX only (default)
-    $0 --demo
-
-    # Build with RocksDB support and run benchmarks
-    $0 --rocksdb --benchmark
-
-    # Clean release build and run specific benchmarks
-    $0 --clean --release --benchmark --filter "MDBX*"
-
-    # Build with RocksDB and run everything
-    $0 --rocksdb --demo --benchmark --tests
-
-${BOLD}REQUIREMENTS:${NC}
-    - CMake 3.21+
-    - C++23 compatible compiler (GCC 12+, Clang 14+)
-    - vcpkg (automatically set up as submodule)
-    - MDBX (automatically downloaded and built via CPM)
-
-EOF
+    echo -e "${BOLD}MDBX Blockchain State Read Accelerator - Build & Run Script${NC}"
+    echo
+    echo -e "${BOLD}USAGE:${NC}"
+    echo -e "    $0 [OPTIONS]"
+    echo
+    echo -e "${BOLD}BUILD OPTIONS:${NC}"
+    echo -e "    --rocksdb           Enable RocksDB support (optional)"
+    echo -e "    --release           Build in Release mode (default: Debug)"
+    echo -e "    --clean             Clean build directory before building"
+    echo -e "    --jobs N            Number of parallel build jobs (default: $(nproc))"
+    echo -e "    --verbose           Enable verbose build output"
+    echo
+    echo -e "${BOLD}RUN OPTIONS:${NC}"
+    echo -e "    --demo              Run the main demo application"
+    echo -e "    --benchmark         Run performance benchmarks"
+    echo -e "    --tests             Run unit tests (if available)"
+    echo -e "    --test-demand       Run MDBX demand requirements test"
+    echo
+    echo -e "${BOLD}BENCHMARK OPTIONS:${NC}"
+    echo -e "    --filter PATTERN    Benchmark filter pattern (default: \"*\")"
+    echo -e "    --time-unit UNIT    Time unit: ns, us, ms, s (default: ms)"
+    echo -e "    --min-time TIME     Minimum time per benchmark (default: 0.1s)"
+    echo -e "    --format FORMAT     Output format: console, json, csv (default: console)"
+    echo
+    echo -e "${BOLD}EXAMPLES:${NC}"
+    echo -e "    # Basic build and run demo with MDBX only (default)"
+    echo -e "    $0 --demo"
+    echo
+    echo -e "    # Build with RocksDB support and run benchmarks"
+    echo -e "    $0 --rocksdb --benchmark"
+    echo
+    echo -e "    # Clean release build and run specific benchmarks"
+    echo -e "    $0 --clean --release --benchmark --filter \"MDBX*\""
+    echo
+    echo -e "    # Build with RocksDB and run everything"
+    echo -e "    $0 --rocksdb --demo --benchmark --tests"
+    echo
+    echo -e "${BOLD}REQUIREMENTS:${NC}"
+    echo -e "    - CMake 3.21+"
+    echo -e "    - C++23 compatible compiler (GCC 12+, Clang 14+)"
+    echo -e "    - vcpkg (automatically set up as submodule)"
+    echo -e "    - MDBX (automatically downloaded and built via CPM)"
+    echo
 }
 
 # =============================================================================
@@ -451,14 +449,12 @@ run_mdbx_demand_test() {
 # =============================================================================
 
 print_banner() {
-    cat << EOF
-
-${PURPLE}╔═══════════════════════════════════════════════════════════════╗${NC}
-${PURPLE}║${NC}          ${BOLD}MDBX Blockchain State Read Accelerator${NC}             ${PURPLE}║${NC}
-${PURPLE}║${NC}                     ${CYAN}Build & Run Script${NC}                      ${PURPLE}║${NC}
-${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}
-
-EOF
+    echo
+    echo -e "${PURPLE}╔═══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║${NC}          ${BOLD}MDBX Blockchain State Read Accelerator${NC}             ${PURPLE}║${NC}"
+    echo -e "${PURPLE}║${NC}                     ${CYAN}Build & Run Script${NC}                      ${PURPLE}║${NC}"
+    echo -e "${PURPLE}╚═══════════════════════════════════════════════════════════════╝${NC}"
+    echo
 }
 
 print_summary() {
