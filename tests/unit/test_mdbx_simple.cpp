@@ -1,5 +1,5 @@
 #include "db/mdbx.hpp"
-#include <iostream>
+#include <fmt/format.h>
 #include <string>
 #include <vector>
 #include <cassert>
@@ -30,14 +30,14 @@ void assert_cursor_result(const CursorResult& result, bool should_exist,
         assert(result.done);
         if (!expected_key.empty()) {
             std::string actual_key{result.key.as_string()};
-            std::cout << "actual_key: " << actual_key << std::endl;
-            std::cout << "expected_key: " << expected_key << std::endl;
+            fmt::println("actual_key: {}", actual_key);
+            fmt::println("expected_key: {}", expected_key);
             assert(actual_key == expected_key);
         }
         if (!expected_value.empty()) {
             std::string actual_value{result.value.as_string()};
-            std::cout << "actual_value: " << actual_value << std::endl;
-            std::cout << "expected_value: " << expected_value << std::endl;
+            fmt::println("actual_value: {}", actual_value);
+            fmt::println("expected_value: {}", expected_value);
             assert(actual_value == expected_value);
         }
     } else {
@@ -46,12 +46,12 @@ void assert_cursor_result(const CursorResult& result, bool should_exist,
 }
 
 void test_environment_and_config() {
-    std::cout << "\n=== 测试环境配置和打开 ===" << std::endl;
+    fmt::println("\n=== 测试环境配置和打开 ===");
 
     std::filesystem::path db_dir = "/tmp/test_mdbx_comprehensive";
     if (std::filesystem::exists(db_dir)) {
         std::filesystem::remove_all(db_dir);
-        std::cout << "清理旧的测试数据库文件" << std::endl;
+        fmt::println("清理旧的测试数据库文件");
     }
 
     // 测试 EnvConfig 结构体的所有配置选项
@@ -75,13 +75,13 @@ void test_environment_and_config() {
 
     // 测试 get_datafile_path 工具函数
     auto data_file_path = get_datafile_path(std::filesystem::path{config.path});
-    std::cout << "数据文件路径: " << data_file_path << std::endl;
+    fmt::println("数据文件路径: {}", data_file_path.string());
 
-    std::cout << "✓ 环境配置和打开测试通过" << std::endl;
+    fmt::println("✓ 环境配置和打开测试通过");
 }
 
 void test_map_config_and_operations(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试表配置和基本操作 ===" << std::endl;
+    fmt::println("\n=== 测试表配置和基本操作 ===");
 
     // 测试 MapConfig 结构体
     MapConfig single_config{"single_value_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
@@ -102,25 +102,25 @@ void test_map_config_and_operations(::mdbx::env_managed& env) {
     bool has_multi = has_map(txn.operator*(), "multi_value_table");
     bool has_nonexistent = has_map(txn.operator*(), "nonexistent_table");
 
-    std::cout << "表 'single_value_table' 存在: " << (has_single ? "是" : "否") << std::endl;
-    std::cout << "表 'multi_value_table' 存在: " << (has_multi ? "是" : "否") << std::endl;
-    std::cout << "表 'nonexistent_table' 存在: " << (has_nonexistent ? "是" : "否") << std::endl;
+    fmt::println("表 'single_value_table' 存在: {}", (has_single ? "是" : "否"));
+    fmt::println("表 'multi_value_table' 存在: {}", (has_multi ? "是" : "否"));
+    fmt::println("表 'nonexistent_table' 存在: {}", (has_nonexistent ? "是" : "否"));
 
     // 测试 list_maps 函数
     auto map_names = list_maps(txn.operator*(), false);
-    std::cout << "数据库中的表: ";
+    fmt::print("数据库中的表: ");
     for (const auto& name : map_names) {
-        std::cout << name << " ";
+        fmt::print("{} ", name);
     }
-    std::cout << std::endl;
+    fmt::println("");
 
     txn.commit_and_stop();
 
-    std::cout << "✓ 表配置和基本操作测试通过" << std::endl;
+    fmt::println("✓ 表配置和基本操作测试通过");
 }
 
 void test_transaction_types(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试各种事务类型 ===" << std::endl;
+    fmt::println("\n=== 测试各种事务类型 ===");
 
     MapConfig config{"txn_test_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
 
@@ -133,7 +133,7 @@ void test_transaction_types(::mdbx::env_managed& env) {
         bool is_open = rw_txn.is_open();
         mdbx::env db_env = rw_txn.db();
 
-        std::cout << "读写事务ID: " << txn_id << ", 是否开启: " << (is_open ? "是" : "否") << std::endl;
+        fmt::println("读写事务ID: {}, 是否开启: {}", txn_id, (is_open ? "是" : "否"));
 
         // 测试提交控制
         rw_txn.disable_commit();
@@ -156,7 +156,7 @@ void test_transaction_types(::mdbx::env_managed& env) {
         uint64_t ro_txn_id = ro_txn.id();
         bool ro_is_open = ro_txn.is_open();
 
-        std::cout << "只读事务ID: " << ro_txn_id << ", 是否开启: " << (ro_is_open ? "是" : "否") << std::endl;
+        fmt::println("只读事务ID: {}, 是否开启: {}", ro_txn_id, (ro_is_open ? "是" : "否"));
 
         auto cursor = ro_txn.ro_cursor(config);
         auto result = cursor->find(str_to_slice("txn_key"));
@@ -180,11 +180,11 @@ void test_transaction_types(::mdbx::env_managed& env) {
         rw_tx.commit_and_stop();
     }
 
-    std::cout << "✓ 事务类型测试通过" << std::endl;
+    fmt::println("✓ 事务类型测试通过");
 }
 
 void test_single_value_cursor_operations(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试单值游标操作 ===" << std::endl;
+    fmt::println("\n=== 测试单值游标操作 ===");
 
     MapConfig config{"single_cursor_test", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
 
@@ -214,14 +214,14 @@ void test_single_value_cursor_operations(::mdbx::env_managed& env) {
     // 测试表大小
     size_t table_size = cursor.size();
     assert(table_size == 5);
-    std::cout << "表大小: " << table_size << std::endl;
+    fmt::println("表大小: {}", table_size);
 
     // 测试导航操作 - ROCursor 接口
 
     // 测试 to_first
     auto result = cursor.to_first();
     assert_cursor_result(result, true, "key001", "value001");
-    std::cout << "第一个记录: " << result.key.as_string() << " = " << result.value.as_string() << std::endl;
+    fmt::println("第一个记录: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 on_first
     assert(cursor.on_first() == true);
@@ -237,7 +237,7 @@ void test_single_value_cursor_operations(::mdbx::env_managed& env) {
     // 测试 to_last
     result = cursor.to_last();
     assert_cursor_result(result, true, "key005", "value005");
-    std::cout << "最后一个记录: " << result.key.as_string() << " = " << result.value.as_string() << std::endl;
+    fmt::println("最后一个记录: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 on_last
     assert(cursor.on_last() == true);
@@ -249,12 +249,12 @@ void test_single_value_cursor_operations(::mdbx::env_managed& env) {
     // 测试 find 操作
     result = cursor.find(str_to_slice("key003"));
     assert_cursor_result(result, true, "key003", "value003");
-    std::cout << "查找key003: " << result.key.as_string() << " = " << result.value.as_string() << std::endl;
+    fmt::println("查找key003: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 lower_bound 操作
     result = cursor.lower_bound(str_to_slice("key0025"));
     assert_cursor_result(result, true, "key003", "value003");
-    std::cout << "下界查找key0025: " << result.key.as_string() << " = " << result.value.as_string() << std::endl;
+    fmt::println("下界查找key0025: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 seek 操作
     bool seek_result = cursor.seek(str_to_slice("key004"));
@@ -265,14 +265,14 @@ void test_single_value_cursor_operations(::mdbx::env_managed& env) {
     // 测试 move 操作
     auto move_result = cursor.move(MoveOperation::next, false);
     if (move_result.done) {
-        std::cout << "移动到下一个: " << move_result.key.as_string() << " = " << move_result.value.as_string() << std::endl;
+        fmt::println("移动到下一个: {} = {}", move_result.key.as_string(), move_result.value.as_string());
     }
 
     // 测试 upsert 操作
     cursor.upsert(str_to_slice("key003"), str_to_slice("updated_value003"));
     result = cursor.find(str_to_slice("key003"));
     assert_cursor_result(result, true, "key003", "updated_value003");
-    std::cout << "更新后key003: " << result.key.as_string() << " = " << result.value.as_string() << std::endl;
+    fmt::println("更新后key003: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 update 操作（需要先定位到键）
     cursor.find(str_to_slice("key002"));
@@ -306,11 +306,11 @@ void test_single_value_cursor_operations(::mdbx::env_managed& env) {
 
     txn.commit_and_stop();
 
-    std::cout << "✓ 单值游标操作测试通过" << std::endl;
+    fmt::println("✓ 单值游标操作测试通过");
 }
 
 void test_multi_value_cursor_operations(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试多值游标操作 ===" << std::endl;
+    fmt::println("\n=== 测试多值游标操作 ===");
 
     MapConfig config{"multi_cursor_test", ::mdbx::key_mode::usual, ::mdbx::value_mode::multi};
 
@@ -343,50 +343,50 @@ void test_multi_value_cursor_operations(::mdbx::env_managed& env) {
     // 测试 to_current_first_multi
     result = cursor.to_current_first_multi();
     assert_cursor_result(result, true, "user1", "admin");
-    std::cout << "user1的第一个值: " << result.value.as_string() << std::endl;
+    fmt::println("user1的第一个值: {}", result.value.as_string());
 
     // 测试 to_current_next_multi
     result = cursor.to_current_next_multi();
     assert_cursor_result(result, true, "user1", "editor");
-    std::cout << "user1的下一个值: " << result.value.as_string() << std::endl;
+    fmt::println("user1的下一个值: {}", result.value.as_string());
 
     // 测试 to_current_last_multi
     result = cursor.to_current_last_multi();
     assert_cursor_result(result, true, "user1", "viewer");
-    std::cout << "user1的最后一个值: " << result.value.as_string() << std::endl;
+    fmt::println("user1的最后一个值: {}", result.value.as_string());
 
     // 测试 to_current_prev_multi
     result = cursor.to_current_prev_multi();
     assert_cursor_result(result, true, "user1", "editor");
-    std::cout << "user1的前一个值: " << result.value.as_string() << std::endl;
+    fmt::println("user1的前一个值: {}", result.value.as_string());
 
     // 测试 count_multivalue
     cursor.find(str_to_slice("user1"));
     size_t count = cursor.count_multivalue();
     assert(count == 3);
-    std::cout << "user1的值数量: " << count << std::endl;
+    fmt::println("user1的值数量: {}", count);
 
     // 测试 find_multivalue
     result = cursor.find_multivalue(str_to_slice("user1"), str_to_slice("editor"));
     assert_cursor_result(result, true, "user1", "editor");
-    std::cout << "精确查找user1-editor: " << result.value.as_string() << std::endl;
+    fmt::println("精确查找user1-editor: {}", result.value.as_string());
 
     // 测试 lower_bound_multivalue
     result = cursor.lower_bound_multivalue(str_to_slice("user1"), str_to_slice("e"));
     assert_cursor_result(result, true, "user1", "editor");
-    std::cout << "下界查找user1-e: " << result.value.as_string() << std::endl;
+    fmt::println("下界查找user1-e: {}", result.value.as_string());
 
     // 测试 to_next_first_multi
     cursor.find(str_to_slice("user1"));
     result = cursor.to_next_first_multi();
     assert_cursor_result(result, true, "user2", "editor");
-    std::cout << "下一个键的第一个值: " << result.key.as_string() << " = " << result.value.as_string() << std::endl;
+    fmt::println("下一个键的第一个值: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 to_previous_last_multi
     cursor.find(str_to_slice("user2"));
     result = cursor.to_previous_last_multi();
     assert_cursor_result(result, true, "user1", "viewer");
-    std::cout << "上一个键的最后一个值: " << result.key.as_string() << " = " << result.value.as_string() << std::endl;
+    fmt::println("上一个键的最后一个值: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试多值删除操作
 
@@ -412,11 +412,11 @@ void test_multi_value_cursor_operations(::mdbx::env_managed& env) {
 
     txn.commit_and_stop();
 
-    std::cout << "✓ 多值游标操作测试通过" << std::endl;
+    fmt::println("✓ 多值游标操作测试通过");
 }
 
 void test_batch_operations(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试批量操作 ===" << std::endl;
+    fmt::println("\n=== 测试批量操作 ===");
 
     MapConfig config{"batch_test_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
 
@@ -451,13 +451,13 @@ void test_batch_operations(::mdbx::env_managed& env) {
 
         // 正向遍历
         size_t forward_count = cursor_for_each(*cursor, walker_func, CursorMoveDirection::kForward);
-        std::cout << "正向遍历记录数: " << forward_count << std::endl;
+        fmt::println("正向遍历记录数: {}", forward_count);
         assert(forward_count == batch_data.size());
 
         // 反向遍历
         collected_data.clear();
         size_t reverse_count = cursor_for_each(*cursor, walker_func, CursorMoveDirection::kReverse);
-        std::cout << "反向遍历记录数: " << reverse_count << std::endl;
+        fmt::println("反向遍历记录数: {}", reverse_count);
         assert(reverse_count == batch_data.size());
 
         ro_txn.abort();
@@ -475,11 +475,11 @@ void test_batch_operations(::mdbx::env_managed& env) {
 
         ByteView prefix = str_to_byteview("prefix_");
         size_t prefix_count = cursor_for_prefix(*cursor, prefix, prefix_walker_func);
-        std::cout << "前缀'prefix_'的记录数: " << prefix_count << std::endl;
+        fmt::println("前缀'prefix_'的记录数: {}", prefix_count);
         assert(prefix_count == 2);
 
         for (const auto& [key, value] : prefix_data) {
-            std::cout << "  前缀记录: " << key << " = " << value << std::endl;
+            fmt::println("  前缀记录: {} = {}", key, value);
             assert(key.starts_with("prefix_"));
         }
 
@@ -497,7 +497,7 @@ void test_batch_operations(::mdbx::env_managed& env) {
         };
 
         size_t limited_count = cursor_for_count(*cursor, count_walker_func, 3);
-        std::cout << "限制遍历记录数: " << limited_count << std::endl;
+        fmt::println("限制遍历记录数: {}", limited_count);
         assert(limited_count == 3);
         assert(limited_data.size() == 3);
 
@@ -512,7 +512,7 @@ void test_batch_operations(::mdbx::env_managed& env) {
         // 测试 cursor_erase_prefix
         ByteView erase_prefix = str_to_byteview("prefix_");
         size_t erased_count = cursor_erase_prefix(*cursor, erase_prefix);
-        std::cout << "删除前缀'prefix_'的记录数: " << erased_count << std::endl;
+        fmt::println("删除前缀'prefix_'的记录数: {}", erased_count);
         assert(erased_count == 2);
 
         // 验证删除结果
@@ -522,16 +522,16 @@ void test_batch_operations(::mdbx::env_managed& env) {
         // 测试 cursor_erase 从某个键开始删除
         ByteView start_key = str_to_byteview("other_001");
         size_t range_erased = cursor_erase(*cursor, start_key, CursorMoveDirection::kForward);
-        std::cout << "从'other_001'开始删除的记录数: " << range_erased << std::endl;
+        fmt::println("从'other_001'开始删除的记录数: {}", range_erased);
 
         rw_txn.commit_and_stop();
     }
 
-    std::cout << "✓ 批量操作测试通过" << std::endl;
+    fmt::println("✓ 批量操作测试通过");
 }
 
 void test_utility_functions(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试工具函数 ===" << std::endl;
+    fmt::println("\n=== 测试工具函数 ===");
 
     // 测试类型转换函数
     std::string test_str = "hello_world";
@@ -542,7 +542,7 @@ void test_utility_functions(::mdbx::env_managed& env) {
     assert(bv.size() == slice.size());
     assert(bv.size() == converted_bv.size());
     assert(std::memcmp(bv.data(), converted_bv.data(), bv.size()) == 0);
-    std::cout << "✓ 类型转换函数测试通过" << std::endl;
+    fmt::println("✓ 类型转换函数测试通过");
 
     // 测试大小计算函数
     RWTxnManaged txn(env);
@@ -552,20 +552,19 @@ void test_utility_functions(::mdbx::env_managed& env) {
     size_t max_value_size1 = max_value_size_for_leaf_page(page_size, key_size);
     size_t max_value_size2 = max_value_size_for_leaf_page(txn.operator*(), key_size);
 
-    std::cout << "页面大小 " << page_size << ", 键大小 " << key_size << " 时的最大值大小: "
-              << max_value_size1 << std::endl;
-    std::cout << "从事务获取的最大值大小: " << max_value_size2 << std::endl;
+    fmt::println("页面大小 {}, 键大小 {} 时的最大值大小: {}", page_size, key_size, max_value_size1);
+    fmt::println("从事务获取的最大值大小: {}", max_value_size2);
 
     assert(max_value_size1 > 0);
     assert(max_value_size2 > 0);
 
     txn.commit_and_stop();
 
-    std::cout << "✓ 工具函数测试通过" << std::endl;
+    fmt::println("✓ 工具函数测试通过");
 }
 
 void test_pooled_cursor_features(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试PooledCursor特有功能 ===" << std::endl;
+    fmt::println("\n=== 测试PooledCursor特有功能 ===");
 
     MapConfig config{"pooled_test_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
 
@@ -580,16 +579,15 @@ void test_pooled_cursor_features(::mdbx::env_managed& env) {
 
     // 测试获取统计信息
     MDBX_stat stat = cursor1.get_map_stat();
-    std::cout << "表统计 - 页面大小: " << stat.ms_psize
-              << ", 条目数: " << stat.ms_entries << std::endl;
+    fmt::println("表统计 - 页面大小: {}, 条目数: {}", stat.ms_psize, stat.ms_entries);
 
     // 测试获取表标志
     MDBX_db_flags_t flags = cursor1.get_map_flags();
-    std::cout << "表标志: " << flags << std::endl;
+    fmt::println("表标志: {}", static_cast<unsigned int>(flags));
 
     // 测试获取map handle
     auto map_handle = cursor1.map();
-    std::cout << "Map handle有效: " << (map_handle ? "是" : "否") << std::endl;
+    fmt::println("Map handle有效: {}", (map_handle ? "是" : "否"));
 
     txn1.commit_and_stop();
 
@@ -604,7 +602,7 @@ void test_pooled_cursor_features(::mdbx::env_managed& env) {
 
     // 测试游标缓存
     const auto& cache = PooledCursor::handles_cache();
-    std::cout << "测试游标句柄缓存访问成功" << std::endl;
+    fmt::println("测试游标句柄缓存访问成功");
 
     // 测试 put 操作（低级接口）
     std::string pool_key2 = "pool_key2";
@@ -621,11 +619,11 @@ void test_pooled_cursor_features(::mdbx::env_managed& env) {
 
     txn2.commit_and_stop();
 
-    std::cout << "✓ PooledCursor特有功能测试通过" << std::endl;
+    fmt::println("✓ PooledCursor特有功能测试通过");
 }
 
 void test_important_features(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试重要功能：DUPSORT和特殊查询 ===" << std::endl;
+    fmt::println("\n=== 测试重要功能：DUPSORT和特殊查询 ===");
 
     // 配置启用DUPSORT的表（多值表）
     MapConfig dup_config{"address_height_mapping", ::mdbx::key_mode::usual, ::mdbx::value_mode::multi};  // 启用DUPSORT
@@ -652,10 +650,10 @@ void test_important_features(::mdbx::env_managed& env) {
         Slice height_slice{&height_be, sizeof(height_be)};
 
         cursor->append(str_to_slice(address), height_slice);
-        std::cout << "添加映射: " << address << " -> " << height << std::endl;
+        fmt::println("添加映射: {} -> {}", address, height);
     }
 
-    std::cout << "\n--- 测试MDBX_GET_BOTH_RANGE等价功能 ---" << std::endl;
+    fmt::println("\n--- 测试MDBX_GET_BOTH_RANGE等价功能 ---");
 
     // 测试 lower_bound_multivalue (相当于 MDBX_GET_BOTH_RANGE)
     // 查找 addressA 中 >= 125 的第一个高度
@@ -665,11 +663,11 @@ void test_important_features(::mdbx::env_managed& env) {
     auto range_result = cursor->lower_bound_multivalue(str_to_slice(addressA), search_height_slice);
     if (range_result.done) {
         uint64_t found_height = be64toh(*reinterpret_cast<const uint64_t*>(range_result.value.data()));
-        std::cout << "BOTH_RANGE查找 " << addressA << " >= 125: 找到高度 " << found_height << std::endl;
+        fmt::println("BOTH_RANGE查找 {} >= 125: 找到高度 {}", addressA, found_height);
         assert(found_height == 150);  // 应该找到150，因为它是>=125的第一个
     }
 
-    std::cout << "\n--- 测试MDBX_PREV_DUP等价功能 ---" << std::endl;
+    fmt::println("\n--- 测试MDBX_PREV_DUP等价功能 ---");
 
     // 先定位到addressA的最后一个值（200）
     auto last_result = cursor->find(str_to_slice(addressA));
@@ -677,29 +675,29 @@ void test_important_features(::mdbx::env_managed& env) {
         cursor->to_current_last_multi();
         auto current = cursor->current();
         uint64_t current_height = be64toh(*reinterpret_cast<const uint64_t*>(current.value.data()));
-        std::cout << "当前位置: " << addressA << " -> " << current_height << std::endl;
+        fmt::println("当前位置: {} -> {}", addressA, current_height);
 
         // 测试 to_current_prev_multi (相当于 MDBX_PREV_DUP)
         auto prev_result = cursor->to_current_prev_multi(false);
         if (prev_result.done) {
             uint64_t prev_height = be64toh(*reinterpret_cast<const uint64_t*>(prev_result.value.data()));
-            std::cout << "PREV_DUP: " << addressA << " -> " << prev_height << std::endl;
+            fmt::println("PREV_DUP: {} -> {}", addressA, prev_height);
             assert(prev_height == 150);  // 应该是200的前一个值150
         }
     }
 
-    std::cout << "\n--- 测试完整的多值遍历 ---" << std::endl;
+    fmt::println("\n--- 测试完整的多值遍历 ---");
 
     // 遍历addressA的所有值
     cursor->find(str_to_slice(addressA));
     cursor->to_current_first_multi();
 
-    std::cout << "addressA的所有高度值:" << std::endl;
+    fmt::println("addressA的所有高度值:");
     size_t value_count = 0;
     do {
         auto current = cursor->current();
         uint64_t height = be64toh(*reinterpret_cast<const uint64_t*>(current.value.data()));
-        std::cout << "  高度: " << height << std::endl;
+        fmt::println("  高度: {}", height);
         value_count++;
 
         auto next = cursor->to_current_next_multi(false);
@@ -707,15 +705,15 @@ void test_important_features(::mdbx::env_managed& env) {
     } while (true);
 
     assert(value_count == 3);  // addressA应该有3个高度值
-    std::cout << "addressA总共有 " << value_count << " 个高度值" << std::endl;
+    fmt::println("addressA总共有 {} 个高度值", value_count);
 
     // 测试count_multivalue
     cursor->find(str_to_slice(addressA));
     size_t counted_values = cursor->count_multivalue();
     assert(counted_values == 3);
-    std::cout << "count_multivalue确认: " << counted_values << " 个值" << std::endl;
+    fmt::println("count_multivalue确认: {} 个值", counted_values);
 
-    std::cout << "\n--- 测试跨键导航 ---" << std::endl;
+    fmt::println("\n--- 测试跨键导航 ---");
 
     // 从addressA的最后一个值导航到addressB的第一个值
     cursor->find(str_to_slice(addressA));
@@ -724,18 +722,18 @@ void test_important_features(::mdbx::env_managed& env) {
     auto next_key_result = cursor->to_next_first_multi(false);
     if (next_key_result.done) {
         uint64_t next_height = be64toh(*reinterpret_cast<const uint64_t*>(next_key_result.value.data()));
-        std::cout << "下一个键的第一个值: " << next_key_result.key.as_string() << " -> " << next_height << std::endl;
+        fmt::println("下一个键的第一个值: {} -> {}", next_key_result.key.as_string(), next_height);
         assert(std::string(next_key_result.key.as_string()) == addressB);
         assert(next_height == 150);
     }
 
     txn.commit_and_stop();
 
-    std::cout << "✓ 重要功能测试通过" << std::endl;
+    fmt::println("✓ 重要功能测试通过");
 }
 
 void test_error_handling_and_edge_cases(::mdbx::env_managed& env) {
-    std::cout << "\n=== 测试错误处理和边界情况 ===" << std::endl;
+    fmt::println("\n=== 测试错误处理和边界情况 ===");
 
     MapConfig config{"error_test_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
 
@@ -746,7 +744,7 @@ void test_error_handling_and_edge_cases(::mdbx::env_managed& env) {
         // 测试查找不存在的键
         auto result = cursor->find(str_to_slice("nonexistent_key"), false);
         assert_cursor_result(result, false);
-        std::cout << "✓ 查找不存在键的处理正确" << std::endl;
+        fmt::println("✓ 查找不存在键的处理正确");
 
         // 测试在空表上的操作
         assert(cursor->empty() == true);
@@ -776,7 +774,7 @@ void test_error_handling_and_edge_cases(::mdbx::env_managed& env) {
             cursor->insert(str_to_slice("key1"), str_to_slice("duplicate_value"));
             assert(false);  // 不应该到达这里
         } catch (const mdbx::key_exists&) {
-            std::cout << "✓ 重复键插入正确抛出异常" << std::endl;
+            fmt::println("✓ 重复键插入正确抛出异常");
         }
 
         // 测试更新不存在的键
@@ -784,23 +782,23 @@ void test_error_handling_and_edge_cases(::mdbx::env_managed& env) {
             cursor->update(str_to_slice("nonexistent"), str_to_slice("value"));
             assert(false);  // 不应该到达这里
         } catch (const mdbx::not_found&) {
-            std::cout << "✓ 更新不存在键正确抛出异常" << std::endl;
+            fmt::println("✓ 更新不存在键正确抛出异常");
         } catch (const mdbx::key_mismatch&) {
-            std::cout << "✓ 更新不存在键正确抛出异常" << std::endl;
+            fmt::println("✓ 更新不存在键正确抛出异常");
         }
 
         txn.commit_and_stop();
 
     } catch (const std::exception& e) {
-        std::cerr << "意外异常: " << e.what() << std::endl;
+        fmt::println(stderr, "意外异常: {}", e.what());
         assert(false);
     }
 
-    std::cout << "✓ 错误处理和边界情况测试通过" << std::endl;
+    fmt::println("✓ 错误处理和边界情况测试通过");
 }
 
 int main() {
-    std::cout << "开始MDBX综合功能测试" << std::endl;
+    fmt::println("开始MDBX综合功能测试");
 
     try {
         // 测试1: 环境配置和打开
@@ -841,10 +839,10 @@ int main() {
         // 测试10: 错误处理和边界情况
         test_error_handling_and_edge_cases(env);
 
-        std::cout << "\n🎉 所有测试通过！MDBX包装API功能完整且正确工作。" << std::endl;
+        fmt::println("\n🎉 所有测试通过！MDBX包装API功能完整且正确工作。");
 
     } catch (const std::exception& e) {
-        std::cerr << "\n❌ 测试失败: " << e.what() << std::endl;
+        fmt::println(stderr, "\n❌ 测试失败: {}", e.what());
         return 1;
     }
 

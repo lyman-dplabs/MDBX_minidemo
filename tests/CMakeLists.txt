@@ -18,7 +18,7 @@ target_include_directories(test_mdbx_simple PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${MDBX_INCLUDE_DIRS}
 )
-target_link_libraries(test_mdbx_simple PRIVATE mdbx-static)
+target_link_libraries(test_mdbx_simple PRIVATE mdbx-static fmt::fmt)
 
 # RocksDB test (conditional on ENABLE_ROCKSDB)
 if(ENABLE_ROCKSDB)
@@ -36,7 +36,7 @@ target_include_directories(test_mdbx_demand PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${MDBX_INCLUDE_DIRS}
 )
-target_link_libraries(test_mdbx_demand PRIVATE mdbx-static)
+target_link_libraries(test_mdbx_demand PRIVATE mdbx-static fmt::fmt)
 
 # --- Test Discovery and Organization ---
 # Set up test properties for better organization
