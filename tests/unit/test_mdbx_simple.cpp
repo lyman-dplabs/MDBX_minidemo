@@ -1,4 +1,5 @@
 #include "db/mdbx.hpp"
+#include "../src/utils/string_utils.hpp"
 #include <fmt/format.h>
 #include <string>
 #include <vector>
@@ -6,44 +7,7 @@
 #include <cstring>
 
 using namespace datastore::kvdb;
-
-// 辅助函数：将字符串转换为ByteView
-ByteView str_to_byteview(const std::string& str) {
-    return ByteView{reinterpret_cast<const std::byte*>(str.data()), str.size()};
-}
-
-// 辅助函数：将ByteView转换为字符串
-std::string byteview_to_str(const ByteView& bv) {
-    return std::string{reinterpret_cast<const char*>(bv.data()), bv.size()};
-}
-
-// 辅助函数：将字符串转换为Slice
-Slice str_to_slice(const std::string& str) {
-    return Slice{str.data(), str.size()};
-}
-
-// 辅助函数：验证CursorResult
-void assert_cursor_result(const CursorResult& result, bool should_exist,
-                         const std::string& expected_key = "",
-                         const std::string& expected_value = "") {
-    if (should_exist) {
-        assert(result.done);
-        if (!expected_key.empty()) {
-            std::string actual_key{result.key.as_string()};
-            fmt::println("actual_key: {}", actual_key);
-            fmt::println("expected_key: {}", expected_key);
-            assert(actual_key == expected_key);
-        }
-        if (!expected_value.empty()) {
-            std::string actual_value{result.value.as_string()};
-            fmt::println("actual_value: {}", actual_value);
-            fmt::println("expected_value: {}", expected_value);
-            assert(actual_value == expected_value);
-        }
-    } else {
-        assert(!result.done);
-    }
-}
+using namespace utils;
 
 void test_environment_and_config() {
     fmt::println("\n=== 测试环境配置和打开 ===");

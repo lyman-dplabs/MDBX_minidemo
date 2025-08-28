@@ -13,7 +13,7 @@ target_include_directories(test_endian PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_endian PRIVATE fmt::fmt)
 
 # MDBX simple functionality test
-add_executable(test_mdbx_simple unit/test_mdbx_simple.cpp ${CMAKE_SOURCE_DIR}/src/db/mdbx.cpp)
+add_executable(test_mdbx_simple unit/test_mdbx_simple.cpp ${CMAKE_SOURCE_DIR}/src/db/mdbx.cpp ${CMAKE_SOURCE_DIR}/src/utils/string_utils.cpp)
 target_include_directories(test_mdbx_simple PRIVATE 
     ${CMAKE_SOURCE_DIR}/src
     ${MDBX_INCLUDE_DIRS}
@@ -31,7 +31,7 @@ endif()
 # These tests verify end-to-end functionality and system integration
 
 # MDBX comprehensive demand test
-add_executable(test_mdbx_demand integration/test_mdbx_demand.cpp ${CMAKE_SOURCE_DIR}/src/db/mdbx.cpp)
+add_executable(test_mdbx_demand integration/test_mdbx_demand.cpp ${CMAKE_SOURCE_DIR}/src/db/mdbx.cpp ${CMAKE_SOURCE_DIR}/src/utils/string_utils.cpp)
 target_include_directories(test_mdbx_demand PRIVATE 
     ${CMAKE_SOURCE_DIR}/src
     ${MDBX_INCLUDE_DIRS}

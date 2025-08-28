@@ -1,4 +1,5 @@
 #include "db/mdbx.hpp"
+#include "../../src/utils/string_utils.hpp"
 #include <fmt/format.h>
 #include <string>
 #include <vector>
@@ -9,72 +10,7 @@
 #include <filesystem>
 
 using namespace datastore::kvdb;
-
-// 辅助函数：将字符串转换为ByteView
-ByteView str_to_byteview(const std::string& str) {
-    return ByteView{reinterpret_cast<const std::byte*>(str.data()), str.size()};
-}
-
-// 辅助函数：将ByteView转换为字符串
-std::string byteview_to_str(const ByteView& bv) {
-    return std::string{reinterpret_cast<const char*>(bv.data()), bv.size()};
-}
-
-// 辅助函数：将字符串转换为Slice
-Slice str_to_slice(const std::string& str) {
-    return Slice{str.data(), str.size()};
-}
-
-// 辅助函数：将uint64_t转换为hex字符串（左边用0填充到16位）
-std::string uint64_to_hex(uint64_t value) {
-    std::stringstream ss;
-    ss << std::hex << std::setfill('0') << std::setw(16) << value;
-    return ss.str();
-}
-
-// 辅助函数：将hex字符串转换为uint64_t（支持多种string类型）
-template<typename StringType>
-uint64_t hex_to_uint64_impl(const StringType& hex_str) {
-    std::stringstream ss;
-    ss << std::hex << hex_str;
-    uint64_t value;
-    ss >> value;
-    return value;
-}
-
-uint64_t hex_to_uint64(const std::string& hex_str) {
-    return hex_to_uint64_impl(hex_str);
-}
-
-template<typename CharT, typename Traits, typename Alloc>
-uint64_t hex_to_uint64(const std::basic_string<CharT, Traits, Alloc>& hex_str) {
-    return hex_to_uint64_impl(hex_str);
-}
-
-// 辅助函数：安全地将任何类型的string转换为std::string
-template<typename StringType>
-std::string to_std_string(const StringType& str) {
-    return std::string(str.data(), str.size());
-}
-
-// 辅助函数：验证CursorResult
-void assert_cursor_result(const CursorResult& result, bool should_exist, 
-                         const std::string& expected_key = "", 
-                         const std::string& expected_value = "") {
-    if (should_exist) {
-        assert(result.done);
-        if (!expected_key.empty()) {
-            std::string actual_key = to_std_string(result.key.as_string());
-            assert(actual_key == expected_key);
-        }
-        if (!expected_value.empty()) {
-            std::string actual_value = to_std_string(result.value.as_string());
-            assert(actual_value == expected_value);
-        }
-    } else {
-        assert(!result.done);
-    }
-}
+using namespace utils;
 
 // 全局环境变量
 ::mdbx::env_managed g_env;
