@@ -128,7 +128,9 @@ void test_basic_1_rw_transaction_commit_abort() {
         
         // 通过dbi创建新表并插入数据
         auto cursor = rw_txn.rw_cursor(table_config);
-        cursor->insert(str_to_slice("key1"), str_to_slice("value1"));
+        std::string key1 = "key1";
+        std::string value1 = "value1";
+        cursor->insert(str_to_slice(key1), str_to_slice(value1));
         
         fmt::println("插入数据到表: test_commit_table");
         
@@ -143,7 +145,7 @@ void test_basic_1_rw_transaction_commit_abort() {
         fmt::println("✓ 表 'test_commit_table' 创建成功");
         
         auto ro_cursor = ro_txn.ro_cursor(table_config);
-        auto result = ro_cursor->find(str_to_slice("key1"));
+        auto result = ro_cursor->find(str_to_slice(key1));
         assert_cursor_result(result, true, "key1", "value1");
         fmt::println("✓ 数据在commit后可读取");
         
@@ -162,7 +164,9 @@ void test_basic_1_rw_transaction_commit_abort() {
         
         // 通过dbi创建新表并插入数据
         auto cursor = rw_txn.rw_cursor(table_config);
-        cursor->insert(str_to_slice("key1"), str_to_slice("value1"));
+        std::string key1 = "key1";
+        std::string value1 = "value1";
+        cursor->insert(str_to_slice(key1), str_to_slice(value1));
         
         fmt::println("插入数据到表: test_abort_table");
         
@@ -190,7 +194,9 @@ void test_basic_2_readonly_transaction_restrictions() {
         RWTxnManaged rw_txn(g_env);
         MapConfig table_config{"readonly_test_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
         auto cursor = rw_txn.rw_cursor(table_config);
-        cursor->insert(str_to_slice("existing_key"), str_to_slice("existing_value"));
+        std::string existing_key = "existing_key";
+        std::string existing_value = "existing_value";
+        cursor->insert(str_to_slice(existing_key), str_to_slice(existing_value));
         rw_txn.commit_and_stop();
     }
     
@@ -204,7 +210,9 @@ void test_basic_2_readonly_transaction_restrictions() {
     auto ro_cursor = ro_txn.ro_cursor(table_config);
     
     // 验证可以读取
-    auto result = ro_cursor->find(str_to_slice("existing_key"));
+    std::string existing_key = "existing_key";
+    std::string existing_value = "existing_value";
+    auto result = ro_cursor->find(str_to_slice(existing_key));
     assert_cursor_result(result, true, "existing_key", "existing_value");
     fmt::println("✓ 只读事务可以正常读取数据");
     
@@ -234,8 +242,12 @@ void test_basic_3_concurrent_transactions() {
     {
         RWTxnManaged init_txn(g_env);
         auto cursor = init_txn.rw_cursor(table_config);
-        cursor->insert(str_to_slice("shared_key1"), str_to_slice("initial_value1"));
-        cursor->insert(str_to_slice("shared_key2"), str_to_slice("initial_value2"));
+        std::string shared_key1 = "shared_key1";
+        std::string initial_value1 = "initial_value1";
+        std::string shared_key2 = "shared_key2";
+        std::string initial_value2 = "initial_value2";
+        cursor->insert(str_to_slice(shared_key1), str_to_slice(initial_value1));
+        cursor->insert(str_to_slice(shared_key2), str_to_slice(initial_value2));
         init_txn.commit_and_stop();
         fmt::println("初始化测试数据完成");
     }
@@ -253,9 +265,10 @@ void test_basic_3_concurrent_transactions() {
         auto cursor3 = ro_txn3.ro_cursor(table_config);
         
         // 所有只读事务都应该能读取到相同的数据
-        auto result1 = cursor1->find(str_to_slice("shared_key1"));
-        auto result2 = cursor2->find(str_to_slice("shared_key1"));
-        auto result3 = cursor3->find(str_to_slice("shared_key1"));
+        std::string shared_key1 = "shared_key1";
+        auto result1 = cursor1->find(str_to_slice(shared_key1));
+        auto result2 = cursor2->find(str_to_slice(shared_key1));
+        auto result3 = cursor3->find(str_to_slice(shared_key1));
         
         assert_cursor_result(result1, true, "shared_key1", "initial_value1");
         assert_cursor_result(result2, true, "shared_key1", "initial_value1");
@@ -277,7 +290,8 @@ void test_basic_3_concurrent_transactions() {
         auto ro_cursor = ro_txn.ro_cursor(table_config);
         
         // 读取初始值
-        auto initial_result = ro_cursor->find(str_to_slice("shared_key1"));
+        std::string shared_key1 = "shared_key1";
+        auto initial_result = ro_cursor->find(str_to_slice(shared_key1));
         assert_cursor_result(initial_result, true, "shared_key1", "initial_value1");
         fmt::println("只读事务读取到初始值: {}", to_std_string(initial_result.value.as_string()));
         
@@ -285,19 +299,23 @@ void test_basic_3_concurrent_transactions() {
         {
             RWTxnManaged rw_txn(g_env);
             auto rw_cursor = rw_txn.rw_cursor(table_config);
-            rw_cursor->upsert(str_to_slice("shared_key1"), str_to_slice("modified_value1"));
-            rw_cursor->insert(str_to_slice("new_key"), str_to_slice("new_value"));
+            std::string modified_value1 = "modified_value1";
+            std::string new_key = "new_key";
+            std::string new_value = "new_value";
+            rw_cursor->upsert(str_to_slice(shared_key1), str_to_slice(modified_value1));
+            rw_cursor->insert(str_to_slice(new_key), str_to_slice(new_value));
             rw_txn.commit_and_stop();
             fmt::println("读写事务修改数据并commit");
         }
         
         // 只读事务应该仍然看到原始数据（MVCC特性）
-        auto unchanged_result = ro_cursor->find(str_to_slice("shared_key1"));
+        auto unchanged_result = ro_cursor->find(str_to_slice(shared_key1));
         assert_cursor_result(unchanged_result, true, "shared_key1", "initial_value1");
         fmt::println("✓ 只读事务仍看到原始数据（MVCC隔离）: {}", to_std_string(unchanged_result.value.as_string()));
         
         // 只读事务不应该看到新插入的键
-        auto new_key_result = ro_cursor->find(str_to_slice("new_key"), false);
+        std::string new_key = "new_key";
+        auto new_key_result = ro_cursor->find(str_to_slice(new_key), false);
         assert_cursor_result(new_key_result, false);
         fmt::println("✓ 只读事务看不到后插入的键");
         
@@ -306,11 +324,11 @@ void test_basic_3_concurrent_transactions() {
         // 新的只读事务应该能看到修改后的数据
         ROTxnManaged new_ro_txn(g_env);
         auto new_cursor = new_ro_txn.ro_cursor(table_config);
-        auto updated_result = new_cursor->find(str_to_slice("shared_key1"));
+        auto updated_result = new_cursor->find(str_to_slice(shared_key1));
         assert_cursor_result(updated_result, true, "shared_key1", "modified_value1");
         fmt::println("✓ 新只读事务能看到修改后的数据: {}", to_std_string(updated_result.value.as_string()));
         
-        auto new_key_result2 = new_cursor->find(str_to_slice("new_key"));
+        auto new_key_result2 = new_cursor->find(str_to_slice(new_key));
         assert_cursor_result(new_key_result2, true, "new_key", "new_value");
         fmt::println("✓ 新只读事务能看到新插入的键");
         
@@ -370,7 +388,8 @@ void test_basic_4_dupsort_table_operations() {
     
     // 尝试再次添加已存在的值
     try {
-        cursor->append(str_to_slice(test_key), str_to_slice("role_admin"));
+        std::string role_admin = "role_admin";
+        cursor->append(str_to_slice(test_key), str_to_slice(role_admin));
         fmt::println("再次尝试添加已存在的值: role_admin");
     } catch (const mdbx::key_exists&) {
         fmt::println("尝试添加重复值被阻止（符合预期）: role_admin");
@@ -385,12 +404,14 @@ void test_basic_4_dupsort_table_operations() {
     fmt::println("✓ 相同值不会重复存储，数量仍为: {}", count_after_dup);
     
     // 测试精确查找特定的key-value组合
-    auto exact_result = cursor->find_multivalue(str_to_slice(test_key), str_to_slice("role_editor"));
+    std::string role_editor = "role_editor";
+    auto exact_result = cursor->find_multivalue(str_to_slice(test_key), str_to_slice(role_editor));
     assert_cursor_result(exact_result, true, test_key, "role_editor");
     fmt::println("✓ 可以精确查找特定的key-value组合");
     
     // 测试查找不存在的value
-    auto not_found_result = cursor->find_multivalue(str_to_slice(test_key), str_to_slice("role_nonexistent"), false);
+    std::string role_nonexistent = "role_nonexistent";
+    auto not_found_result = cursor->find_multivalue(str_to_slice(test_key), str_to_slice(role_nonexistent), false);
     assert_cursor_result(not_found_result, false);
     fmt::println("✓ 查找不存在的value正确返回未找到");
     
@@ -625,8 +646,10 @@ void test_business_3_atomic_multi_table_transaction() {
         auto cursor2 = rollback_txn.rw_cursor(table2_config);
         
         // 向两个表插入数据
-        cursor1->insert(str_to_slice(test_key_rollback), str_to_slice("rollback_value1"));
-        cursor2->insert(str_to_slice(test_key_rollback), str_to_slice("rollback_value2"));
+        std::string rollback_value1 = "rollback_value1";
+        std::string rollback_value2 = "rollback_value2";
+        cursor1->insert(str_to_slice(test_key_rollback), str_to_slice(rollback_value1));
+        cursor2->insert(str_to_slice(test_key_rollback), str_to_slice(rollback_value2));
         
         fmt::println("插入回滚测试数据到两个表");
         

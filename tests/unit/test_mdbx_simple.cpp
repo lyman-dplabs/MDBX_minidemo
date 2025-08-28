@@ -144,7 +144,9 @@ void test_transaction_types(::mdbx::env_managed& env) {
 
         // 插入测试数据
         auto cursor = rw_txn.rw_cursor(config);
-        cursor->insert(str_to_slice("txn_key"), str_to_slice("txn_value"));
+        std::string txn_key = "txn_key";
+        std::string txn_value = "txn_value";
+        cursor->insert(str_to_slice(txn_key), str_to_slice(txn_value));
 
         rw_txn.commit_and_stop();
     }
@@ -159,7 +161,8 @@ void test_transaction_types(::mdbx::env_managed& env) {
         fmt::println("只读事务ID: {}, 是否开启: {}", ro_txn_id, (ro_is_open ? "是" : "否"));
 
         auto cursor = ro_txn.ro_cursor(config);
-        auto result = cursor->find(str_to_slice("txn_key"));
+        std::string txn_key = "txn_key";
+        auto result = cursor->find(str_to_slice(txn_key));
         assert_cursor_result(result, true, "txn_key", "txn_value");
 
         ro_txn.abort();
@@ -170,13 +173,16 @@ void test_transaction_types(::mdbx::env_managed& env) {
         ROAccess ro_access(env);
         auto ro_tx = ro_access.start_ro_tx();
         auto cursor = ro_tx.ro_cursor(config);
-        auto result = cursor->find(str_to_slice("txn_key"));
+        std::string txn_key = "txn_key";
+        auto result = cursor->find(str_to_slice(txn_key));
         assert_cursor_result(result, true);
 
         RWAccess rw_access(env);
         auto rw_tx = rw_access.start_rw_tx();
         auto rw_cursor = rw_tx.rw_cursor(config);
-        rw_cursor->upsert(str_to_slice("access_key"), str_to_slice("access_value"));
+        std::string access_key = "access_key";
+        std::string access_value = "access_value";
+        rw_cursor->upsert(str_to_slice(access_key), str_to_slice(access_value));
         rw_tx.commit_and_stop();
     }
 
@@ -247,17 +253,20 @@ void test_single_value_cursor_operations(::mdbx::env_managed& env) {
     assert_cursor_result(result, true, "key004", "value004");
 
     // 测试 find 操作
-    result = cursor.find(str_to_slice("key003"));
+    std::string find_key = "key003";
+    result = cursor.find(str_to_slice(find_key));
     assert_cursor_result(result, true, "key003", "value003");
     fmt::println("查找key003: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 lower_bound 操作
-    result = cursor.lower_bound(str_to_slice("key0025"));
+    std::string bound_key = "key0025";
+    result = cursor.lower_bound(str_to_slice(bound_key));
     assert_cursor_result(result, true, "key003", "value003");
     fmt::println("下界查找key0025: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 seek 操作
-    bool seek_result = cursor.seek(str_to_slice("key004"));
+    std::string seek_key = "key004";
+    bool seek_result = cursor.seek(str_to_slice(seek_key));
     assert(seek_result == true);
     result = cursor.current();
     assert_cursor_result(result, true, "key004", "value004");
@@ -269,25 +278,31 @@ void test_single_value_cursor_operations(::mdbx::env_managed& env) {
     }
 
     // 测试 upsert 操作
-    cursor.upsert(str_to_slice("key003"), str_to_slice("updated_value003"));
-    result = cursor.find(str_to_slice("key003"));
+    std::string upsert_key = "key003";
+    std::string upsert_value = "updated_value003";
+    cursor.upsert(str_to_slice(upsert_key), str_to_slice(upsert_value));
+    result = cursor.find(str_to_slice(upsert_key));
     assert_cursor_result(result, true, "key003", "updated_value003");
     fmt::println("更新后key003: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 update 操作（需要先定位到键）
-    cursor.find(str_to_slice("key002"));
-    cursor.update(str_to_slice("key002"), str_to_slice("updated_value002"));
-    result = cursor.find(str_to_slice("key002"));
+    std::string update_key = "key002";
+    std::string update_value = "updated_value002";
+    cursor.find(str_to_slice(update_key));
+    cursor.update(str_to_slice(update_key), str_to_slice(update_value));
+    result = cursor.find(str_to_slice(update_key));
     assert_cursor_result(result, true, "key002", "updated_value002");
 
     // 测试删除操作
-    bool erase_result = cursor.erase(str_to_slice("key001"));
+    std::string erase_key = "key001";
+    bool erase_result = cursor.erase(str_to_slice(erase_key));
     assert(erase_result == true);
-    result = cursor.find(str_to_slice("key001"), false);
+    result = cursor.find(str_to_slice(erase_key), false);
     assert_cursor_result(result, false);
 
     // 测试当前位置删除
-    cursor.find(str_to_slice("key002"));
+    std::string current_erase_key = "key002";
+    cursor.find(str_to_slice(current_erase_key));
     erase_result = cursor.erase();
     assert(erase_result == true);
 
@@ -337,7 +352,8 @@ void test_multi_value_cursor_operations(::mdbx::env_managed& env) {
     // 测试多值游标特有的导航操作
 
     // 定位到user1的数据
-    auto result = cursor.find(str_to_slice("user1"));
+    std::string user1 = "user1";
+    auto result = cursor.find(str_to_slice(user1));
     assert_cursor_result(result, true, "user1", "admin");  // 应该是第一个值（字典序）
 
     // 测试 to_current_first_multi
@@ -361,29 +377,32 @@ void test_multi_value_cursor_operations(::mdbx::env_managed& env) {
     fmt::println("user1的前一个值: {}", result.value.as_string());
 
     // 测试 count_multivalue
-    cursor.find(str_to_slice("user1"));
+    cursor.find(str_to_slice(user1));
     size_t count = cursor.count_multivalue();
     assert(count == 3);
     fmt::println("user1的值数量: {}", count);
 
     // 测试 find_multivalue
-    result = cursor.find_multivalue(str_to_slice("user1"), str_to_slice("editor"));
+    std::string editor_value = "editor";
+    result = cursor.find_multivalue(str_to_slice(user1), str_to_slice(editor_value));
     assert_cursor_result(result, true, "user1", "editor");
     fmt::println("精确查找user1-editor: {}", result.value.as_string());
 
     // 测试 lower_bound_multivalue
-    result = cursor.lower_bound_multivalue(str_to_slice("user1"), str_to_slice("e"));
+    std::string e_prefix = "e";
+    result = cursor.lower_bound_multivalue(str_to_slice(user1), str_to_slice(e_prefix));
     assert_cursor_result(result, true, "user1", "editor");
     fmt::println("下界查找user1-e: {}", result.value.as_string());
 
     // 测试 to_next_first_multi
-    cursor.find(str_to_slice("user1"));
+    cursor.find(str_to_slice(user1));
     result = cursor.to_next_first_multi();
     assert_cursor_result(result, true, "user2", "editor");
     fmt::println("下一个键的第一个值: {} = {}", result.key.as_string(), result.value.as_string());
 
     // 测试 to_previous_last_multi
-    cursor.find(str_to_slice("user2"));
+    std::string user2 = "user2";
+    cursor.find(str_to_slice(user2));
     result = cursor.to_previous_last_multi();
     assert_cursor_result(result, true, "user1", "viewer");
     fmt::println("上一个键的最后一个值: {} = {}", result.key.as_string(), result.value.as_string());
@@ -391,23 +410,25 @@ void test_multi_value_cursor_operations(::mdbx::env_managed& env) {
     // 测试多值删除操作
 
     // 测试删除特定键值对
-    bool erase_result = cursor.erase(str_to_slice("user1"), str_to_slice("admin"));
+    std::string admin_value = "admin";
+    bool erase_result = cursor.erase(str_to_slice(user1), str_to_slice(admin_value));
     assert(erase_result == true);
 
     // 验证删除结果
-    result = cursor.find_multivalue(str_to_slice("user1"), str_to_slice("admin"), false);
+    result = cursor.find_multivalue(str_to_slice(user1), str_to_slice(admin_value), false);
     assert_cursor_result(result, false);
 
     // 检查其他值仍然存在
-    result = cursor.find_multivalue(str_to_slice("user1"), str_to_slice("editor"));
+    result = cursor.find_multivalue(str_to_slice(user1), str_to_slice(editor_value));
     assert_cursor_result(result, true, "user1", "editor");
 
     // 测试删除整个键的所有值
-    cursor.find(str_to_slice("user3"));
+    std::string user3 = "user3";
+    cursor.find(str_to_slice(user3));
     erase_result = cursor.erase(true);  // whole_multivalue = true
     assert(erase_result == true);
 
-    result = cursor.find(str_to_slice("user3"), false);
+    result = cursor.find(str_to_slice(user3), false);
     assert_cursor_result(result, false);
 
     txn.commit_and_stop();
@@ -516,7 +537,8 @@ void test_batch_operations(::mdbx::env_managed& env) {
         assert(erased_count == 2);
 
         // 验证删除结果
-        auto verify_result = cursor->find(str_to_slice("prefix_001"), false);
+        std::string prefix_001 = "prefix_001";
+        auto verify_result = cursor->find(str_to_slice(prefix_001), false);
         assert_cursor_result(verify_result, false);
 
         // 测试 cursor_erase 从某个键开始删除
@@ -575,7 +597,9 @@ void test_pooled_cursor_features(::mdbx::env_managed& env) {
     cursor1.bind(txn1, config);
 
     // 插入测试数据
-    cursor1.insert(str_to_slice("pool_key1"), str_to_slice("pool_value1"));
+    std::string pool_key1 = "pool_key1";
+    std::string pool_value1 = "pool_value1";
+    cursor1.insert(str_to_slice(pool_key1), str_to_slice(pool_value1));
 
     // 测试获取统计信息
     MDBX_stat stat = cursor1.get_map_stat();
@@ -595,8 +619,6 @@ void test_pooled_cursor_features(::mdbx::env_managed& env) {
     RWTxnManaged txn2(env);
     cursor1.bind(txn2, config);
 
-    std::string pool_key1 = "pool_key1";
-    std::string pool_value1 = "pool_value1";
     auto result = cursor1.find(str_to_slice(pool_key1));
     assert_cursor_result(result, true, pool_key1, pool_value1);
 
@@ -742,7 +764,8 @@ void test_error_handling_and_edge_cases(::mdbx::env_managed& env) {
         auto cursor = txn.rw_cursor(config);
 
         // 测试查找不存在的键
-        auto result = cursor->find(str_to_slice("nonexistent_key"), false);
+        std::string nonexistent_key = "nonexistent_key";
+        auto result = cursor->find(str_to_slice(nonexistent_key), false);
         assert_cursor_result(result, false);
         fmt::println("✓ 查找不存在键的处理正确");
 
@@ -756,8 +779,12 @@ void test_error_handling_and_edge_cases(::mdbx::env_managed& env) {
         assert_cursor_result(move_result, false);
 
         // 插入一些数据用于边界测试
-        cursor->insert(str_to_slice("key1"), str_to_slice("value1"));
-        cursor->insert(str_to_slice("key2"), str_to_slice("value2"));
+        std::string key1 = "key1";
+        std::string value1 = "value1";
+        std::string key2 = "key2";
+        std::string value2 = "value2";
+        cursor->insert(str_to_slice(key1), str_to_slice(value1));
+        cursor->insert(str_to_slice(key2), str_to_slice(value2));
 
         // 测试边界导航
         cursor->to_first();
@@ -771,7 +798,8 @@ void test_error_handling_and_edge_cases(::mdbx::env_managed& env) {
 
         // 测试重复插入（应该失败）
         try {
-            cursor->insert(str_to_slice("key1"), str_to_slice("duplicate_value"));
+            std::string duplicate_value = "duplicate_value";
+            cursor->insert(str_to_slice(key1), str_to_slice(duplicate_value));
             assert(false);  // 不应该到达这里
         } catch (const mdbx::key_exists&) {
             fmt::println("✓ 重复键插入正确抛出异常");
@@ -779,7 +807,9 @@ void test_error_handling_and_edge_cases(::mdbx::env_managed& env) {
 
         // 测试更新不存在的键
         try {
-            cursor->update(str_to_slice("nonexistent"), str_to_slice("value"));
+            std::string nonexistent = "nonexistent";
+            std::string test_value = "value";
+            cursor->update(str_to_slice(nonexistent), str_to_slice(test_value));
             assert(false);  // 不应该到达这里
         } catch (const mdbx::not_found&) {
             fmt::println("✓ 更新不存在键正确抛出异常");
