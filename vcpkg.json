@@ -4,6 +4,7 @@
   "dependencies": [
     "benchmark",
     "gtest", 
-    "fmt"
+    "fmt",
+    "jsoncpp"
   ]
 }

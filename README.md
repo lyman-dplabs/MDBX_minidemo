@@ -58,6 +58,9 @@ sudo yum install cmake gcc-c++ git
 # 构建并运行MDBX需求验证测试
 ./run.sh --test-demand
 
+# 构建并运行MDBX性能基准测试
+./run.sh --mdbx-bench
+
 # 构建并运行所有组件
 ./run.sh --demo --benchmark --tests
 ```
@@ -125,6 +128,7 @@ export BENCH_MAX_BLOCK_NUMBER=100000
 | `--benchmark` | 运行性能基准测试 |
 | `--tests` | 运行单元测试 |
 | `--test-demand` | 运行MDBX需求验证测试 |
+| `--mdbx-bench` | 运行MDBX性能基准测试 |
 
 ### 基准测试选项
 
@@ -153,11 +157,13 @@ export BENCH_MAX_BLOCK_NUMBER=100000
 ```
 mdbx_demo/
 ├── run.sh                 # 主构建脚本
+├── run_mdbx_bench.sh      # MDBX性能基准测试专用脚本
 ├── CMakeLists.txt         # CMake 配置
 ├── vcpkg.json            # vcpkg 依赖配置
 ├── src/                  # 源代码
 │   ├── main.cpp          # 主程序入口
 │   ├── benchmark.cpp     # 基准测试
+│   ├── mdbx_bench.cpp    # MDBX性能基准测试工具
 │   ├── core/             # 核心逻辑
 │   ├── db/               # 数据库实现
 │   └── utils/            # 工具函数
@@ -166,8 +172,14 @@ mdbx_demo/
 ├── third_party/          # 第三方依赖
 │   └── vcpkg/           # vcpkg 包管理器
 ├── build/                # 构建输出目录
-├── test_*.cpp           # 测试文件
-├── test_mdbx_demand.cpp # MDBX需求验证测试
+│   ├── mdbx_demo         # 主演示程序
+│   ├── benchmark_runner  # 性能基准测试
+│   └── mdbx_bench        # MDBX性能基准测试工具
+├── tests/                # 测试目录
+│   ├── integration/      # 集成测试
+│   │   └── test_mdbx_demand.cpp # MDBX需求验证测试
+│   └── unit/            # 单元测试
+├── bench_demand.md       # 基准测试需求规格
 └── test_demand.md       # 测试需求规格说明
 ```
 
@@ -526,3 +538,258 @@ void setup_environment() {
 ```
 
 该测试套件确保MDBX封装完全满足 `test_demand.md` 中定义的所有功能需求，为区块链状态存储提供可靠、高性能的数据库操作接口。
+
+## MDBX性能基准测试工具
+
+项目包含专门的MDBX性能基准测试工具 (`src/mdbx_bench.cpp`)，用于测试MDBX在实际工作负载下的性能表现。该工具模拟从1亿个键值对数据集中选择10万个32字节的键值对进行性能测试。
+
+### 测试场景
+
+根据 `bench_demand.md` 的规格，基准测试涵盖以下性能指标：
+
+#### 1. 写入性能测试
+- **数据规模**: 从100M个KV对中随机选择100K个进行测试
+- **数据格式**: 每个键和值都是32字节
+- **持久化级别**: Durable（完全持久化到磁盘）
+- **测量指标**: 
+  - 总写入时间
+  - Commit时间（专门测量事务提交耗时）
+  - 写入吞吐量（ops/sec）
+
+```cpp
+// 写入性能测试核心代码
+RWTxnManaged rw_txn(env);
+auto cursor = rw_txn.rw_cursor(table_config);
+
+for (const auto& [key, value] : dataset) {
+    cursor->insert(str_to_slice(key), str_to_slice(value));
+}
+
+// 专门测量commit时间
+auto commit_start = std::chrono::high_resolution_clock::now();
+rw_txn.commit_and_stop();
+auto commit_end = std::chrono::high_resolution_clock::now();
+```
+
+#### 2. 随机读取性能测试
+- **读取模式**: 从已写入的数据中随机读取
+- **读取次数**: 默认10,000次随机读取
+- **测量指标**:
+  - 总读取时间
+  - 读取吞吐量（ops/sec）
+  - 平均读取延迟
+  - 成功读取率
+
+```cpp
+// 随机读取性能测试
+ROTxnManaged ro_txn(env);
+auto cursor = ro_txn.ro_cursor(table_config);
+
+for (size_t idx : random_indices) {
+    const auto& key = dataset[idx].first;
+    auto result = cursor->find(str_to_slice(key));
+    if (result.done) successful_reads++;
+}
+```
+
+#### 3. 更新性能测试
+- **更新模式**: 纯更新操作（非多版本）
+- **更新次数**: 默认10,000次随机更新
+- **测量指标**:
+  - 总更新时间
+  - 更新Commit时间
+  - 更新吞吐量（ops/sec）
+
+```cpp
+// 更新性能测试
+RWTxnManaged rw_txn(env);
+auto cursor = rw_txn.rw_cursor(table_config);
+
+for (size_t idx : update_indices) {
+    const auto& key = dataset[idx].first;
+    std::string new_value = generate_value(idx + 999999);
+    cursor->upsert(str_to_slice(key), str_to_slice(new_value));
+}
+
+rw_txn.commit_and_stop();
+```
+
+### 配置系统
+
+#### 使用默认配置
+```bash
+# 使用默认配置运行基准测试
+./run.sh --mdbx-bench
+
+# 或者直接使用专用脚本
+./run_mdbx_bench.sh
+```
+
+#### 自定义EnvConfig配置
+
+工具支持通过JSON配置文件自定义MDBX环境参数：
+
+```bash
+# 创建示例配置文件
+./run_mdbx_bench.sh --sample-config
+
+# 使用自定义配置
+./run_mdbx_bench.sh --config mdbx_bench_config.json
+```
+
+#### 配置文件格式
+
+```json
+{
+  "path": "/tmp/mdbx_bench",
+  "create": true,
+  "readonly": false,
+  "exclusive": false,
+  "in_memory": false,
+  "shared": false,
+  "read_ahead": false,
+  "write_map": false,
+  "page_size": 4096,
+  "max_size": 8589934592,
+  "growth_size": 1073741824,
+  "max_tables": 64,
+  "max_readers": 100
+}
+```
+
+#### 配置参数说明
+
+| 参数 | 说明 | 默认值 | 建议值 |
+|------|------|--------|---------|
+| `path` | 数据库文件路径 | `/tmp/mdbx_bench` | 使用SSD路径 |
+| `max_size` | 最大数据库大小(字节) | 8GB | 根据数据量调整 |
+| `page_size` | MDBX页面大小(字节) | 4096 | 4096/8192/16384 |
+| `growth_size` | 自动扩展大小(字节) | 1GB | 根据写入模式调整 |
+| `max_readers` | 最大并发读者数 | 100 | 根据并发需求调整 |
+| `write_map` | 启用写映射模式 | false | 可提升写性能 |
+| `read_ahead` | 启用预读功能 | false | 顺序访问时启用 |
+
+### 性能优化建议
+
+#### 存储配置优化
+```json
+{
+  "page_size": 16384,        // 更大页面，减少B-tree深度
+  "max_size": 17179869184,   // 16GB，避免频繁扩展
+  "growth_size": 2147483648, // 2GB增量，减少扩展次数
+  "write_map": true,         // 启用写映射，提升写性能
+  "read_ahead": false        // 随机访问时禁用预读
+}
+```
+
+#### 系统优化建议
+- **存储**: 使用NVMe SSD以获得最佳I/O性能
+- **内存**: 确保有足够内存容纳工作集
+- **文件系统**: 使用ext4或xfs，启用noatime挂载选项
+- **内核**: 调整`vm.dirty_ratio`和`vm.dirty_background_ratio`
+
+### 运行基准测试
+
+#### 基本用法
+```bash
+# 通过主构建脚本运行
+./run.sh --mdbx-bench
+
+# 通过专用脚本运行（推荐）
+./run_mdbx_bench.sh
+
+# 只运行基准测试，跳过构建
+./run_mdbx_bench.sh --run-only
+```
+
+#### 高级用法
+```bash
+# 清理构建并运行
+./run_mdbx_bench.sh --clean
+
+# 使用Debug模式构建
+./run_mdbx_bench.sh --debug
+
+# 使用自定义配置
+./run_mdbx_bench.sh --config my_config.json
+
+# 生成示例配置文件
+./run_mdbx_bench.sh --sample-config
+```
+
+### 性能报告解读
+
+#### 典型输出示例
+```
+=== MDBX Performance Benchmark ===
+✓ Generated 100000 test KV pairs
+  Key size: 32 bytes
+  Value size: 32 bytes
+
+=== Write Performance Benchmark ===
+✓ Commit time: 145 ms
+✓ Total write time: 2341 ms
+✓ Write throughput: 42730.82 ops/sec
+
+=== Random Read Performance Benchmark ===
+✓ Successful reads: 10000/10000
+✓ Total read time: 23 ms
+✓ Read throughput: 434782.61 ops/sec
+✓ Average read latency: 0.002 ms
+
+=== Update Performance Benchmark ===
+✓ Update commit time: 89 ms
+✓ Total update time: 156 ms
+✓ Update throughput: 64102.56 ops/sec
+```
+
+#### 性能指标分析
+
+**写入性能**:
+- **Commit时间**: 反映数据持久化到磁盘的耗时
+- **总写入时间**: 包含数据处理和提交的完整耗时
+- **写入吞吐量**: 每秒能处理的写入操作数
+
+**读取性能**:
+- **读取吞吐量**: 每秒能处理的查询操作数
+- **平均延迟**: 单次查询的平均响应时间
+- **成功率**: 查询命中率（应该是100%）
+
+**更新性能**:
+- **更新吞吐量**: 每秒能处理的更新操作数
+- **更新提交时间**: 更新操作的持久化耗时
+
+### 故障排除
+
+#### 常见问题
+
+**问题1**: 编译错误 - jsoncpp库未找到
+```bash
+# 解决方案：确保vcpkg正确安装了jsoncpp
+./third_party/vcpkg/vcpkg install jsoncpp
+```
+
+**问题2**: 运行时路径权限错误
+```bash
+# 解决方案：使用有写权限的路径，或修改配置文件中的path
+{
+  "path": "/home/user/mdbx_bench_data"
+}
+```
+
+**问题3**: 性能异常低下
+```bash
+# 解决方案：检查存储设备、文件系统配置
+# 避免在网络文件系统上运行基准测试
+# 确保数据库路径在本地SSD上
+```
+
+**问题4**: 内存不足
+```bash
+# 解决方案：减少max_size或使用更大内存的机器
+{
+  "max_size": 2147483648  // 2GB instead of 8GB
+}
+```
+
+该基准测试工具为MDBX在区块链状态存储场景下的性能评估提供了全面、准确的测试框架。

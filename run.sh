@@ -67,6 +67,7 @@ RUN_DEMO=false
 RUN_BENCHMARK=false
 RUN_TESTS=false
 RUN_MDBX_DEMAND_TEST=false
+RUN_MDBX_BENCH=false
 VERBOSE=false
 PARALLEL_JOBS=$(nproc)
 
@@ -103,6 +104,7 @@ show_help() {
     echo -e "    --benchmark         Run performance benchmarks"
     echo -e "    --tests             Run unit tests (if available)"
     echo -e "    --test-demand       Run MDBX demand requirements test"
+    echo -e "    --mdbx-bench        Run MDBX performance benchmark"
     echo
     echo -e "${BOLD}BENCHMARK OPTIONS:${NC}"
     echo -e "    --filter PATTERN    Benchmark filter pattern (default: \"*\")"
@@ -172,6 +174,10 @@ parse_arguments() {
                 ;;
             --test-demand)
                 RUN_MDBX_DEMAND_TEST=true
+                shift
+                ;;
+            --mdbx-bench)
+                RUN_MDBX_BENCH=true
                 shift
                 ;;
             --jobs)
@@ -480,6 +486,30 @@ run_mdbx_demand_test() {
     fi
 }
 
+run_mdbx_bench() {
+    log_step "Running MDBX performance benchmark"
+    
+    if [[ ! -x "${BUILD_DIR}/mdbx_bench" ]]; then
+        log_error "MDBX benchmark executable not found. Build the project first."
+        return 1
+    fi
+    
+    log_substep "Running MDBX performance tests..."
+    echo
+    
+    cd "${BUILD_DIR}"
+    if ./mdbx_bench; then
+        cd "${PROJECT_ROOT}"
+        echo
+        log_success "MDBX benchmark completed"
+    else
+        cd "${PROJECT_ROOT}"
+        echo
+        log_error "MDBX benchmark failed"
+        return 1
+    fi
+}
+
 # =============================================================================
 # Main Execution Flow
 # =============================================================================
@@ -508,6 +538,7 @@ print_summary() {
         [[ "${RUN_BENCHMARK}" == "true" ]] && log_substep "${GREEN}✓${NC} Run benchmarks (filter: ${BENCHMARK_FILTER})"
         [[ "${RUN_TESTS}" == "true" ]] && log_substep "${GREEN}✓${NC} Run tests"
         [[ "${RUN_MDBX_DEMAND_TEST}" == "true" ]] && log_substep "${GREEN}✓${NC} Run MDBX demand requirements test"
+        [[ "${RUN_MDBX_BENCH}" == "true" ]] && log_substep "${GREEN}✓${NC} Run MDBX performance benchmark"
     fi
     echo
 }
@@ -551,6 +582,11 @@ main() {
         executed_something=true
     fi
     
+    if [[ "${RUN_MDBX_BENCH}" == "true" ]]; then
+        run_mdbx_bench
+        executed_something=true
+    fi
+    
     # Final message
     echo
     if [[ "${executed_something}" == "true" ]]; then
@@ -563,6 +599,7 @@ main() {
         log_info "  Benchmark:    $0 --benchmark"
         log_info "  Tests:        $0 --tests"
         log_info "  MDBX Demand:  $0 --test-demand"
+        log_info "  MDBX Bench:   $0 --mdbx-bench"
         log_info ""
         log_info "Use --help for more options."
     fi

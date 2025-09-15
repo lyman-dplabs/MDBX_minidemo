@@ -89,6 +89,7 @@ endif()
 find_package(benchmark CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 message(STATUS "All dependencies found.")
 
 # --- Core Logic Library ---
@@ -97,6 +98,7 @@ message(STATUS "All dependencies found.")
 set(CORE_LOGIC_SOURCES
     src/core/query_engine.cpp
     src/db/mdbx_impl.cpp
+    src/db/mdbx.cpp
 )
 
 if(ENABLE_ROCKSDB)
@@ -151,13 +153,24 @@ target_link_libraries(benchmark_runner PRIVATE
     benchmark::benchmark_main # google benchmark provides a main function
 )
 
+# --- MDBX Bench Executable ---
+# This is the MDBX performance benchmark tool
+add_executable(mdbx_bench
+    src/mdbx_bench.cpp
+    src/utils/string_utils.cpp
+)
+target_link_libraries(mdbx_bench PRIVATE
+    core_logic
+    JsonCpp::JsonCpp
+)
+
 # --- Test Suite ---
 # All test configurations are now managed in tests/CMakeLists.txt
 # This provides better organization and separation of concerns
 add_subdirectory(tests)
 
 # --- Installation Rules (Optional) ---
-install(TARGETS mdbx_demo benchmark_runner
+install(TARGETS mdbx_demo benchmark_runner mdbx_bench
     RUNTIME DESTINATION bin
 )
 install(TARGETS core_logic
