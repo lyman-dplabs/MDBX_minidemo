@@ -717,9 +717,23 @@ rw_txn.commit_and_stop();
 ./run_mdbx_bench.sh --sample-config
 ```
 
-### 性能报告解读
+### 测试环境
 
-#### 典型输出示例
+#### 硬件配置
+- **CPU**: AMD EPYC 7K62 48-Core Processor
+  - 核心数: 48核
+  - 基础频率: 1.5 GHz
+  - 最大频率: 2.6 GHz
+  - 缓存: L1d 1.5MB, L1i 1.5MB, L2 24MB, L3 192MB
+- **内存**: 128GB (131,754,456 kB)
+  - 可用内存: 45GB
+  - 交换空间: 976MB
+- **存储**: NVMe SSD 1.8TB
+  - 文件系统: ext4
+  - 可用空间: 678GB
+- **操作系统**: Debian 12 (Linux 6.1.0-37-amd64)
+
+#### 实际测试结果
 ```
 === MDBX Performance Benchmark ===
 ✓ Generated 100000 test KV pairs
@@ -727,20 +741,20 @@ rw_txn.commit_and_stop();
   Value size: 32 bytes
 
 === Write Performance Benchmark ===
-✓ Commit time: 145 ms
-✓ Total write time: 2341 ms
-✓ Write throughput: 42730.82 ops/sec
+✓ Commit time: 15 ms
+✓ Total write time: 80 ms
+✓ Write throughput: 1250000.00 ops/sec
 
 === Random Read Performance Benchmark ===
 ✓ Successful reads: 10000/10000
-✓ Total read time: 23 ms
-✓ Read throughput: 434782.61 ops/sec
-✓ Average read latency: 0.002 ms
+✓ Total read time: 7 ms
+✓ Read throughput: 1428571.43 ops/sec
+✓ Average read latency: 0.001 ms
 
 === Update Performance Benchmark ===
-✓ Update commit time: 89 ms
-✓ Total update time: 156 ms
-✓ Update throughput: 64102.56 ops/sec
+✓ Update commit time: 15 ms
+✓ Total update time: 29 ms
+✓ Update throughput: 344827.59 ops/sec
 ```
 
 #### 性能指标分析
