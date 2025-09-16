@@ -842,10 +842,17 @@ void print_comprehensive_summary(const std::vector<RoundResult>& results, const 
 void setup_environment(const std::string& db_path) {
     fmt::println("\n=== Setting up Test Environment ===");
     
-    // Clean up any existing database
+    // Check if database directory already exists
     if (std::filesystem::exists(db_path)) {
-        std::filesystem::remove_all(db_path);
-        fmt::println("✓ Cleaned existing database at: {}", db_path);
+        fmt::println(stderr, "❌ Error: Database directory already exists: {}", db_path);
+        fmt::println(stderr, "");
+        fmt::println(stderr, "Please manually remove or rename the existing database directory:");
+        fmt::println(stderr, "  rm -rf {}", db_path);
+        fmt::println(stderr, "  or");
+        fmt::println(stderr, "  mv {} {}_backup_$(date +%%Y%%m%%d_%%H%%M%%S)", db_path, db_path);
+        fmt::println(stderr, "");
+        fmt::println(stderr, "This prevents accidental data loss during benchmark testing.");
+        throw std::runtime_error("Database directory already exists");
     }
 }
 
