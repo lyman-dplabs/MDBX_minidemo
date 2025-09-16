@@ -11,6 +11,7 @@
 #include <json/json.h>
 #include <cstdlib>
 #include <memory>
+#include <algorithm>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
@@ -304,9 +305,62 @@ std::vector<size_t> generate_random_indices(size_t count, size_t max_index) {
 struct RoundResult {
     size_t round_number;
     double read_time_ms;
+    double write_time_ms;
+    double mixed_time_ms;
     double commit_time_ms;
     size_t successful_reads;
+    size_t successful_writes;
+    size_t successful_mixed;
     size_t test_kv_count;
+    
+    // Latency statistics
+    std::vector<double> read_latencies_us;   // Individual read latencies in microseconds
+    std::vector<double> write_latencies_us;  // Individual write latencies in microseconds
+    std::vector<double> mixed_latencies_us;  // Individual mixed operation latencies
+    
+    double avg_read_latency_us = 0.0;
+    double tp99_read_latency_us = 0.0;
+    double avg_write_latency_us = 0.0;
+    double tp99_write_latency_us = 0.0;
+    double avg_mixed_latency_us = 0.0;
+    double tp99_mixed_latency_us = 0.0;
+};
+
+// Calculate statistics from latency vectors
+void calculate_latency_stats(RoundResult& result) {
+    auto calc_stats = [](const std::vector<double>& latencies, double& avg, double& tp99) {
+        if (latencies.empty()) {
+            avg = tp99 = 0.0;
+            return;
+        }
+        
+        // Calculate average
+        double sum = 0.0;
+        for (double lat : latencies) {
+            sum += lat;
+        }
+        avg = sum / latencies.size();
+        
+        // Calculate Tp99
+        std::vector<double> sorted_latencies = latencies;
+        std::sort(sorted_latencies.begin(), sorted_latencies.end());
+        size_t tp99_index = static_cast<size_t>(sorted_latencies.size() * 0.99);
+        if (tp99_index >= sorted_latencies.size()) {
+            tp99_index = sorted_latencies.size() - 1;
+        }
+        tp99 = sorted_latencies[tp99_index];
+    };
+    
+    calc_stats(result.read_latencies_us, result.avg_read_latency_us, result.tp99_read_latency_us);
+    calc_stats(result.write_latencies_us, result.avg_write_latency_us, result.tp99_write_latency_us);
+    calc_stats(result.mixed_latencies_us, result.avg_mixed_latency_us, result.tp99_mixed_latency_us);
+}
+
+// Test modes
+enum class TestMode {
+    READ_ONLY,
+    WRITE_ONLY,  
+    MIXED_READ_WRITE
 };
 
 // Perform one round of read-update-commit test
@@ -381,7 +435,395 @@ RoundResult perform_test_round(RocksDBBench& db, size_t round_number, const Benc
     return result;
 }
 
-// Run all test rounds and collect results
+// Perform read-only test
+RoundResult perform_read_test(RocksDBBench& db, size_t round_number, const BenchConfig& config) {
+    fmt::println("\n=== Read Test Round {} ===", round_number);
+    
+    RoundResult result;
+    result.round_number = round_number;
+    result.test_kv_count = config.test_kv_pairs;
+    result.successful_reads = 0;
+    
+    // Generate random indices for this round
+    fmt::println("Generating {} random indices from {} total KV pairs", 
+                 config.test_kv_pairs, config.total_kv_pairs);
+    auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
+    
+    // Read the selected KV pairs with individual latency tracking
+    fmt::println("Reading {} randomly selected KV pairs", config.test_kv_pairs);
+    auto read_start = std::chrono::high_resolution_clock::now();
+    
+    result.read_latencies_us.reserve(config.test_kv_pairs);
+    
+    for (size_t index : test_indices) {
+        std::string key = generate_key(index);
+        std::string value;
+        
+        auto op_start = std::chrono::high_resolution_clock::now();
+        bool found = db.get(key, value);
+        auto op_end = std::chrono::high_resolution_clock::now();
+        
+        if (found) {
+            result.successful_reads++;
+        }
+        
+        double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            op_end - op_start).count();
+        result.read_latencies_us.push_back(latency_us);
+    }
+    
+    auto read_end = std::chrono::high_resolution_clock::now();
+    result.read_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        read_end - read_start).count();
+    
+    calculate_latency_stats(result);
+    
+    fmt::println("✓ Read {} KV pairs in {:.2f} ms", result.successful_reads, result.read_time_ms);
+    fmt::println("✓ Average read latency: {:.2f} μs", result.avg_read_latency_us);
+    fmt::println("✓ Tp99 read latency: {:.2f} μs", result.tp99_read_latency_us);
+    fmt::println("✓ Read throughput: {:.2f} ops/sec", 
+                 static_cast<double>(result.successful_reads) / (result.read_time_ms / 1000.0));
+    
+    return result;
+}
+
+// Perform write-only test
+RoundResult perform_write_test(RocksDBBench& db, size_t round_number, const BenchConfig& config) {
+    fmt::println("\n=== Write Test Round {} ===", round_number);
+    
+    RoundResult result;
+    result.round_number = round_number;
+    result.test_kv_count = config.test_kv_pairs;
+    result.successful_writes = 0;
+    
+    // Generate random indices for this round
+    fmt::println("Generating {} random indices from {} total KV pairs", 
+                 config.test_kv_pairs, config.total_kv_pairs);
+    auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
+    
+    fmt::println("Writing {} randomly selected KV pairs", config.test_kv_pairs);
+    
+    result.write_latencies_us.reserve(config.test_kv_pairs);
+    
+    auto write_start = std::chrono::high_resolution_clock::now();
+    
+    // Use write batch for better performance
+    rocksdb::WriteBatch batch;
+    
+    for (size_t i = 0; i < test_indices.size(); ++i) {
+        size_t index = test_indices[i];
+        std::string key = generate_key(index);
+        std::string new_value = generate_value(index + round_number * 1000000);
+        
+        auto op_start = std::chrono::high_resolution_clock::now();
+        batch.Put(key, new_value);
+        auto op_end = std::chrono::high_resolution_clock::now();
+        
+        result.successful_writes++;
+        
+        double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            op_end - op_start).count();
+        result.write_latencies_us.push_back(latency_us);
+    }
+    
+    auto write_end = std::chrono::high_resolution_clock::now();
+    result.write_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        write_end - write_start).count();
+    
+    // Commit all writes
+    auto commit_start = std::chrono::high_resolution_clock::now();
+    rocksdb::Status status = db.get_db()->Write(rocksdb::WriteOptions(), &batch);
+    auto commit_end = std::chrono::high_resolution_clock::now();
+    
+    if (!status.ok()) {
+        throw std::runtime_error(fmt::format("RocksDB batch write failed: {}", status.ToString()));
+    }
+    
+    result.commit_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        commit_end - commit_start).count();
+    
+    calculate_latency_stats(result);
+    
+    fmt::println("✓ Wrote {} KV pairs in {:.2f} ms", result.successful_writes, result.write_time_ms);
+    fmt::println("✓ Commit time: {:.2f} ms", result.commit_time_ms);
+    fmt::println("✓ Average write latency: {:.2f} μs", result.avg_write_latency_us);
+    fmt::println("✓ Tp99 write latency: {:.2f} μs", result.tp99_write_latency_us);
+    fmt::println("✓ Write throughput: {:.2f} ops/sec", 
+                 static_cast<double>(result.successful_writes) / (result.write_time_ms / 1000.0));
+    
+    return result;
+}
+
+// Perform update test (read-then-update pattern like legacy mode)
+RoundResult perform_update_test(RocksDBBench& db, size_t round_number, const BenchConfig& config) {
+    fmt::println("\n=== Update Test Round {} ===", round_number);
+    
+    RoundResult result;
+    result.round_number = round_number;
+    result.test_kv_count = config.test_kv_pairs;
+    
+    // Step 1: Generate random indices for this round
+    fmt::println("Generating {} random indices from {} total KV pairs", 
+                 config.test_kv_pairs, config.total_kv_pairs);
+    auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
+    
+    // Step 2: Read the selected KV pairs with individual latency tracking
+    fmt::println("Reading {} randomly selected KV pairs", config.test_kv_pairs);
+    auto read_start = std::chrono::high_resolution_clock::now();
+    
+    std::vector<std::pair<std::string, std::string>> read_data;
+    read_data.reserve(config.test_kv_pairs);
+    result.read_latencies_us.reserve(config.test_kv_pairs);
+    
+    result.successful_reads = 0;
+    for (size_t index : test_indices) {
+        std::string key = generate_key(index);
+        std::string value;
+        
+        auto op_start = std::chrono::high_resolution_clock::now();
+        bool found = db.get(key, value);
+        auto op_end = std::chrono::high_resolution_clock::now();
+        
+        if (found) {
+            read_data.emplace_back(std::move(key), std::move(value));
+            result.successful_reads++;
+        }
+        
+        double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            op_end - op_start).count();
+        result.read_latencies_us.push_back(latency_us);
+    }
+    
+    auto read_end = std::chrono::high_resolution_clock::now();
+    result.read_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        read_end - read_start).count();
+    
+    fmt::println("✓ Read {} KV pairs in {:.2f} ms", result.successful_reads, result.read_time_ms);
+    
+    // Step 3: Update the read data and commit with individual latency tracking
+    fmt::println("Updating and committing {} KV pairs", result.successful_reads);
+    
+    result.write_latencies_us.reserve(result.successful_reads);
+    
+    auto write_start = std::chrono::high_resolution_clock::now();
+    
+    // Use write batch for better performance
+    rocksdb::WriteBatch batch;
+    
+    // Update all read data with new values
+    result.successful_writes = 0;
+    for (size_t i = 0; i < read_data.size(); ++i) {
+        const auto& [key, old_value] = read_data[i];
+        // Generate a new value for update (add round number to make it unique)
+        std::string new_value = generate_value(i + round_number * 1000000);
+        
+        auto op_start = std::chrono::high_resolution_clock::now();
+        batch.Put(key, new_value);
+        auto op_end = std::chrono::high_resolution_clock::now();
+        
+        result.successful_writes++;
+        
+        double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            op_end - op_start).count();
+        result.write_latencies_us.push_back(latency_us);
+    }
+    
+    auto write_end = std::chrono::high_resolution_clock::now();
+    result.write_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        write_end - write_start).count();
+    
+    // Commit all updates
+    auto commit_start = std::chrono::high_resolution_clock::now();
+    rocksdb::Status status = db.get_db()->Write(rocksdb::WriteOptions(), &batch);
+    auto commit_end = std::chrono::high_resolution_clock::now();
+    
+    if (!status.ok()) {
+        throw std::runtime_error(fmt::format("RocksDB mixed batch update failed: {}", status.ToString()));
+    }
+    
+    result.commit_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        commit_end - commit_start).count();
+    
+    // Calculate mixed metrics as combination of read and write
+    result.successful_mixed = result.successful_reads + result.successful_writes;
+    result.mixed_time_ms = result.read_time_ms + result.write_time_ms;
+    
+    // Combine read and write latencies for mixed latency stats
+    result.mixed_latencies_us.reserve(result.read_latencies_us.size() + result.write_latencies_us.size());
+    result.mixed_latencies_us.insert(result.mixed_latencies_us.end(), 
+                                   result.read_latencies_us.begin(), result.read_latencies_us.end());
+    result.mixed_latencies_us.insert(result.mixed_latencies_us.end(), 
+                                   result.write_latencies_us.begin(), result.write_latencies_us.end());
+    
+    calculate_latency_stats(result);
+    
+    fmt::println("✓ Updated and committed {} KV pairs", result.successful_writes);
+    fmt::println("✓ Total mixed operations: {} (read: {}, write: {})", 
+                 result.successful_mixed, result.successful_reads, result.successful_writes);
+    fmt::println("✓ Read time: {:.2f} ms, Write time: {:.2f} ms", result.read_time_ms, result.write_time_ms);
+    fmt::println("✓ Commit time: {:.2f} ms", result.commit_time_ms);
+    fmt::println("✓ Average read latency: {:.2f} μs", result.avg_read_latency_us);
+    fmt::println("✓ Average write latency: {:.2f} μs", result.avg_write_latency_us);
+    fmt::println("✓ Average mixed latency: {:.2f} μs", result.avg_mixed_latency_us);
+    fmt::println("✓ Tp99 mixed latency: {:.2f} μs", result.tp99_mixed_latency_us);
+    fmt::println("✓ Mixed throughput: {:.2f} ops/sec", 
+                 static_cast<double>(result.successful_mixed) / (result.mixed_time_ms / 1000.0));
+    
+    return result;
+}
+
+// Perform mixed read-write test with 80:20 ratio
+RoundResult perform_mixed_test(RocksDBBench& db, size_t round_number, const BenchConfig& config) {
+    fmt::println("\n=== Mixed Read-Write Test Round {} ===", round_number);
+    
+    RoundResult result;
+    result.round_number = round_number;
+    result.test_kv_count = config.test_kv_pairs;
+    result.successful_reads = 0;
+    result.successful_writes = 0;
+    result.successful_mixed = 0;
+    
+    // Generate random indices for this round
+    fmt::println("Generating {} mixed operations from {} total KV pairs", 
+                 config.test_kv_pairs, config.total_kv_pairs);
+    auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
+    
+    // Calculate 80:20 ratio
+    size_t read_count = static_cast<size_t>(config.test_kv_pairs * 0.8);
+    size_t write_count = config.test_kv_pairs - read_count;
+    
+    fmt::println("Mixed operations: {} reads, {} writes", read_count, write_count);
+    
+    result.read_latencies_us.reserve(read_count);
+    result.write_latencies_us.reserve(write_count);
+    
+    auto test_start = std::chrono::high_resolution_clock::now();
+    
+    // Use WriteBatch for efficient writing
+    rocksdb::WriteBatch batch;
+    
+    // Perform mixed operations with interleaved reads and writes
+    for (size_t i = 0; i < config.test_kv_pairs; ++i) {
+        size_t index = test_indices[i];
+        std::string key = generate_key(index);
+        
+        if (i < read_count) {
+            // Read operation
+            auto op_start = std::chrono::high_resolution_clock::now();
+            std::string value;
+            rocksdb::Status status = db.get_db()->Get(rocksdb::ReadOptions(), key, &value);
+            auto op_end = std::chrono::high_resolution_clock::now();
+            
+            if (status.ok()) {
+                result.successful_reads++;
+            }
+            
+            double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                op_end - op_start).count();
+            result.read_latencies_us.push_back(latency_us);
+            
+        } else {
+            // Write operation (add to batch)
+            std::string new_value = generate_value(index + round_number * 1000000);
+            
+            auto op_start = std::chrono::high_resolution_clock::now();
+            batch.Put(key, new_value);
+            auto op_end = std::chrono::high_resolution_clock::now();
+            
+            result.successful_writes++;
+            
+            double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                op_end - op_start).count();
+            result.write_latencies_us.push_back(latency_us);
+        }
+    }
+    
+    // Measure commit time (batch write)
+    auto commit_start = std::chrono::high_resolution_clock::now();
+    rocksdb::Status commit_status = db.get_db()->Write(rocksdb::WriteOptions(), &batch);
+    auto commit_end = std::chrono::high_resolution_clock::now();
+    
+    result.commit_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        commit_end - commit_start).count();
+    
+    if (!commit_status.ok()) {
+        fmt::println("Warning: Batch write failed: {}", commit_status.ToString());
+        result.successful_writes = 0; // Reset write count on failure
+    }
+    
+    auto test_end = std::chrono::high_resolution_clock::now();
+    result.mixed_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        test_end - test_start).count();
+    
+    // Calculate separate read and write times
+    result.read_time_ms = 0; // Individual read timing not tracked in mixed mode
+    result.write_time_ms = 0; // Individual write timing not tracked in mixed mode
+    
+    result.successful_mixed = result.successful_reads + result.successful_writes;
+    
+    // Combine read and write latencies for mixed latency stats
+    result.mixed_latencies_us.reserve(result.read_latencies_us.size() + result.write_latencies_us.size());
+    result.mixed_latencies_us.insert(result.mixed_latencies_us.end(), 
+                                   result.read_latencies_us.begin(), result.read_latencies_us.end());
+    result.mixed_latencies_us.insert(result.mixed_latencies_us.end(), 
+                                   result.write_latencies_us.begin(), result.write_latencies_us.end());
+    
+    calculate_latency_stats(result);
+    
+    fmt::println("✓ Completed {} mixed operations (reads: {}, writes: {})", 
+                 result.successful_mixed, result.successful_reads, result.successful_writes);
+    fmt::println("✓ Total mixed time: {:.2f} ms", result.mixed_time_ms);
+    fmt::println("✓ Commit time: {:.2f} ms", result.commit_time_ms);
+    fmt::println("✓ Average read latency: {:.2f} μs", result.avg_read_latency_us);
+    fmt::println("✓ Average write latency: {:.2f} μs", result.avg_write_latency_us);
+    fmt::println("✓ Average mixed latency: {:.2f} μs", result.avg_mixed_latency_us);
+    fmt::println("✓ Tp99 mixed latency: {:.2f} μs", result.tp99_mixed_latency_us);
+    fmt::println("✓ Mixed throughput: {:.2f} ops/sec", 
+                 static_cast<double>(result.successful_mixed) / (result.mixed_time_ms / 1000.0));
+    
+    return result;
+}
+
+// Run comprehensive benchmark with all test modes
+std::vector<RoundResult> run_comprehensive_benchmark(RocksDBBench& db, const BenchConfig& config) {
+    fmt::println("\n=== Running Comprehensive Benchmark Suite ===");
+    fmt::println("Test rounds per mode: {}", config.test_rounds);
+    
+    std::vector<RoundResult> results;
+    results.reserve(config.test_rounds * 4); // 4 test modes
+    
+    // Test Mode 1: Read-only tests
+    fmt::println("\n--- READ-ONLY TESTS ---");
+    for (size_t round = 1; round <= config.test_rounds; ++round) {
+        auto result = perform_read_test(db, round, config);
+        results.push_back(result);
+    }
+    
+    // Test Mode 2: Write-only tests
+    fmt::println("\n--- WRITE-ONLY TESTS ---");
+    for (size_t round = 1; round <= config.test_rounds; ++round) {
+        auto result = perform_write_test(db, round, config);
+        results.push_back(result);
+    }
+    
+    // Test Mode 3: Update tests
+    fmt::println("\n--- UPDATE TESTS ---");
+    for (size_t round = 1; round <= config.test_rounds; ++round) {
+        auto result = perform_update_test(db, round, config);
+        results.push_back(result);
+    }
+    
+    // Test Mode 4: Mixed read-write tests
+    fmt::println("\n--- MIXED READ-WRITE TESTS ---");
+    for (size_t round = 1; round <= config.test_rounds; ++round) {
+        auto result = perform_mixed_test(db, round, config);
+        results.push_back(result);
+    }
+    
+    return results;
+}
+
+// Run all test rounds and collect results (legacy compatibility)
 std::vector<RoundResult> run_benchmark_rounds(RocksDBBench& db, const BenchConfig& config) {
     fmt::println("\n=== Running {} Test Rounds ===", config.test_rounds);
     
@@ -396,10 +838,10 @@ std::vector<RoundResult> run_benchmark_rounds(RocksDBBench& db, const BenchConfi
     return results;
 }
 
-// Print summary statistics
-void print_benchmark_summary(const std::vector<RoundResult>& results, const BenchConfig& config) {
-    fmt::println("\n=== Benchmark Summary ===");
-    fmt::println("Completed {} test rounds", results.size());
+// Print comprehensive summary statistics
+void print_comprehensive_summary(const std::vector<RoundResult>& results, const BenchConfig& config) {
+    fmt::println("\n=== Comprehensive Benchmark Summary ===");
+    fmt::println("Total test results: {}", results.size());
     fmt::println("Database contains {} total KV pairs", config.total_kv_pairs);
     fmt::println("Each round tested {} KV pairs", config.test_kv_pairs);
     
@@ -408,38 +850,93 @@ void print_benchmark_summary(const std::vector<RoundResult>& results, const Benc
         return;
     }
     
-    // Calculate statistics
-    double total_read_time = 0.0;
-    double total_commit_time = 0.0;
-    double min_read_time = results[0].read_time_ms;
-    double max_read_time = results[0].read_time_ms;
-    double min_commit_time = results[0].commit_time_ms;
-    double max_commit_time = results[0].commit_time_ms;
-    
-    fmt::println("\nPer-Round Results:");
+    // Separate results by test type
+    std::vector<RoundResult> read_results, write_results, update_results, mixed_results;
     for (const auto& result : results) {
-        fmt::println("  Round {}: Read={:.2f}ms, Commit={:.2f}ms, Success={}/{}",
-                     result.round_number, result.read_time_ms, result.commit_time_ms,
-                     result.successful_reads, result.test_kv_count);
-        
-        total_read_time += result.read_time_ms;
-        total_commit_time += result.commit_time_ms;
-        min_read_time = std::min(min_read_time, result.read_time_ms);
-        max_read_time = std::max(max_read_time, result.read_time_ms);
-        min_commit_time = std::min(min_commit_time, result.commit_time_ms);
-        max_commit_time = std::max(max_commit_time, result.commit_time_ms);
+        if (result.successful_reads > 0 && result.successful_writes == 0 && result.successful_mixed == 0) {
+            read_results.push_back(result);
+        } else if (result.successful_writes > 0 && result.successful_reads == 0 && result.successful_mixed == 0) {
+            write_results.push_back(result);
+        } else if (result.successful_mixed > 0 && result.read_time_ms > 0 && result.write_time_ms > 0) {
+            // UPDATE mode: has separate read and write times
+            update_results.push_back(result);
+        } else if (result.successful_mixed > 0 && result.read_time_ms == 0 && result.write_time_ms == 0 && result.mixed_time_ms > 0) {
+            // MIXED mode: has only mixed time
+            mixed_results.push_back(result);
+        }
     }
     
-    double avg_read_time = total_read_time / results.size();
-    double avg_commit_time = total_commit_time / results.size();
+    auto print_mode_stats = [](const std::vector<RoundResult>& mode_results, const std::string& mode_name) {
+        if (mode_results.empty()) return;
+        
+        fmt::println("\n--- {} TEST RESULTS ---", mode_name);
+        
+        double total_avg_latency = 0.0, total_tp99_latency = 0.0;
+        double total_time = 0.0, total_commit_time = 0.0;
+        size_t total_operations = 0;
+        
+        fmt::println("Per-Round Results:");
+        for (const auto& result : mode_results) {
+            if (mode_name == "READ-ONLY") {
+                fmt::println("  Round {}: Time={:.2f}ms, Success={}, Avg={:.1f}μs, Tp99={:.1f}μs",
+                           result.round_number, result.read_time_ms, result.successful_reads,
+                           result.avg_read_latency_us, result.tp99_read_latency_us);
+                total_avg_latency += result.avg_read_latency_us;
+                total_tp99_latency += result.tp99_read_latency_us;
+                total_time += result.read_time_ms;
+                total_operations += result.successful_reads;
+            } else if (mode_name == "WRITE-ONLY") {
+                fmt::println("  Round {}: Time={:.2f}ms, Commit={:.2f}ms, Success={}, Avg={:.1f}μs, Tp99={:.1f}μs",
+                           result.round_number, result.write_time_ms, result.commit_time_ms, 
+                           result.successful_writes, result.avg_write_latency_us, result.tp99_write_latency_us);
+                total_avg_latency += result.avg_write_latency_us;
+                total_tp99_latency += result.tp99_write_latency_us;
+                total_time += result.write_time_ms;
+                total_commit_time += result.commit_time_ms;
+                total_operations += result.successful_writes;
+            } else if (mode_name == "UPDATE") {
+                fmt::println("  Round {}: ReadTime={:.2f}ms, WriteTime={:.2f}ms, Commit={:.2f}ms, Success={} (r:{}, w:{}), Avg={:.1f}μs, Tp99={:.1f}μs",
+                           result.round_number, result.read_time_ms, result.write_time_ms, result.commit_time_ms,
+                           result.successful_mixed, result.successful_reads, result.successful_writes, 
+                           result.avg_mixed_latency_us, result.tp99_mixed_latency_us);
+                total_avg_latency += result.avg_mixed_latency_us;
+                total_tp99_latency += result.tp99_mixed_latency_us;
+                total_time += result.read_time_ms + result.write_time_ms;
+                total_commit_time += result.commit_time_ms;
+                total_operations += result.successful_mixed;
+            } else if (mode_name == "MIXED") {
+                fmt::println("  Round {}: Time={:.2f}ms, Commit={:.2f}ms, Success={} (r:{}, w:{}), Avg={:.1f}μs, Tp99={:.1f}μs",
+                           result.round_number, result.mixed_time_ms, result.commit_time_ms,
+                           result.successful_mixed, result.successful_reads, result.successful_writes,
+                           result.avg_mixed_latency_us, result.tp99_mixed_latency_us);
+                total_avg_latency += result.avg_mixed_latency_us;
+                total_tp99_latency += result.tp99_mixed_latency_us;
+                total_time += result.mixed_time_ms;
+                total_commit_time += result.commit_time_ms;
+                total_operations += result.successful_mixed;
+            }
+        }
+        
+        double avg_avg_latency = total_avg_latency / mode_results.size();
+        double avg_tp99_latency = total_tp99_latency / mode_results.size();
+        double avg_time = total_time / mode_results.size();
+        double avg_commit_time = total_commit_time / mode_results.size();
+        double avg_throughput = (static_cast<double>(total_operations) / mode_results.size()) / (avg_time / 1000.0);
+        
+        fmt::println("Summary Statistics:");
+        fmt::println("  Average Latency: {:.1f} μs", avg_avg_latency);
+        fmt::println("  Tp99 Latency: {:.1f} μs", avg_tp99_latency);
+        fmt::println("  Average Time: {:.2f} ms", avg_time);
+        if (avg_commit_time > 0) {
+            fmt::println("  Average Commit Time: {:.2f} ms", avg_commit_time);
+        }
+        fmt::println("  Average Throughput: {:.2f} ops/sec", avg_throughput);
+    };
     
-    fmt::println("\nStatistics:");
-    fmt::println("  Read Time  - Avg: {:.2f}ms, Min: {:.2f}ms, Max: {:.2f}ms", 
-                 avg_read_time, min_read_time, max_read_time);
-    fmt::println("  Commit Time - Avg: {:.2f}ms, Min: {:.2f}ms, Max: {:.2f}ms", 
-                 avg_commit_time, min_commit_time, max_commit_time);
-    fmt::println("  Average Read Throughput: {:.2f} ops/sec", 
-                 static_cast<double>(config.test_kv_pairs) / (avg_read_time / 1000.0));
+    print_mode_stats(read_results, "READ-ONLY");
+    print_mode_stats(write_results, "WRITE-ONLY");  
+    print_mode_stats(update_results, "UPDATE");
+    print_mode_stats(mixed_results, "MIXED");
 }
 
 void setup_environment(const std::string& db_path) {
@@ -547,11 +1044,11 @@ int main(int argc, char* argv[]) {
         // Populate database with initial data
         populate_database(db, bench_config);
         
-        // Run benchmark rounds
-        auto results = run_benchmark_rounds(db, bench_config);
+        // Run comprehensive benchmark suite
+        auto results = run_comprehensive_benchmark(db, bench_config);
         
-        // Print final summary
-        print_benchmark_summary(results, bench_config);
+        // Print comprehensive summary
+        print_comprehensive_summary(results, bench_config);
         
         fmt::println("\n✓ All benchmarks completed successfully! 🎉");
         
