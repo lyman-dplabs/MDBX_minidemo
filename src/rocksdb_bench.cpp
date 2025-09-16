@@ -229,7 +229,7 @@ void populate_database(RocksDBBench& db, const BenchConfig& config) {
     
     // Use write batch for better performance
     rocksdb::WriteBatch batch;
-    const size_t batch_size = 10000;
+    const size_t batch_size = 5000000;
     
     for (size_t i = 0; i < config.total_kv_pairs; ++i) {
         std::string key = generate_key(i);
