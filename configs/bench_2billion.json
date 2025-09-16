@@ -3,5 +3,5 @@
   "test_kv_pairs": 100000,
   "test_rounds": 100,
   "batch_size": 10000000,
-  "db_path": "/tmp/bench_2billion"
+  "db_path": "/data/bench_2billion"
 }

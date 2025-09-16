@@ -94,7 +94,7 @@
 | `total_kv_pairs` | number | 数据库中总的KV对数量 | 1,000,000 |
 | `test_kv_pairs` | number | 每轮测试的KV对数量 | 100,000 |
 | `test_rounds` | number | 测试轮次数 | 2 |
-| `db_path` | string | 数据库文件路径 | "/tmp/bench_default" |
+| `db_path` | string | 数据库文件路径 | "/data/bench_default" |
 
 ### MDBX EnvConfig 参数
 

@@ -29,12 +29,12 @@ struct BenchConfig {
     size_t test_rounds = 2;             // Number of test rounds to run
     
     // Database path
-    std::string db_path = "/tmp/rocksdb_bench";
+    std::string db_path = "/data/rocksdb_bench";
 };
 
 // RocksDBConfig loader with JSON support
 struct RocksDBConfig {
-    std::string path = "/tmp/rocksdb_bench";
+    std::string path = "/data/rocksdb_bench";
     bool create_if_missing = true;
     int max_open_files = 300;
     size_t write_buffer_size = 64 << 20;    // 64MB
@@ -50,7 +50,7 @@ RocksDBConfig load_rocksdb_config(const std::string& config_file) {
     RocksDBConfig config;
     
     // Set defaults
-    config.path = "/tmp/rocksdb_bench";
+    config.path = "/data/rocksdb_bench";
     config.create_if_missing = true;
     config.max_open_files = 300;
     config.write_buffer_size = 64 << 20;
@@ -98,7 +98,7 @@ BenchConfig load_bench_config(const std::string& config_file) {
     config.total_kv_pairs = 1000000;
     config.test_kv_pairs = 100000;
     config.test_rounds = 2;
-    config.db_path = "/tmp/rocksdb_bench";
+    config.db_path = "/data/rocksdb_bench";
     
     // Load from environment variables first
     if (const char* env_val = std::getenv("ROCKSDB_BENCH_TOTAL_KV_PAIRS")) {
@@ -1021,7 +1021,7 @@ void print_usage(const char* program_name) {
     fmt::println("");
     fmt::println("Example RocksDBConfig JSON file:");
     fmt::println("{{");
-    fmt::println("  \"path\": \"/tmp/rocksdb_bench\",");
+    fmt::println("  \"path\": \"/data/rocksdb_bench\",");
     fmt::println("  \"create_if_missing\": true,");
     fmt::println("  \"max_open_files\": 300,");
     fmt::println("  \"write_buffer_size\": 67108864,");
@@ -1033,7 +1033,7 @@ void print_usage(const char* program_name) {
     fmt::println("  \"total_kv_pairs\": 2000000,");
     fmt::println("  \"test_kv_pairs\": 200000,");
     fmt::println("  \"test_rounds\": 5,");
-    fmt::println("  \"db_path\": \"/tmp/rocksdb_bench_custom\"");
+    fmt::println("  \"db_path\": \"/data/rocksdb_bench_custom\"");
     fmt::println("  \"Note\": \"key_size and value_size are fixed at 32 bytes\"");
     fmt::println("}}");
 }
@@ -1074,7 +1074,7 @@ int main(int argc, char* argv[]) {
     BenchConfig bench_config = load_bench_config(bench_config_file);
     
     // Override db_path from rocksdb_config if not set in bench_config
-    if (bench_config.db_path == "/tmp/rocksdb_bench" && !rocksdb_config.path.empty()) {
+    if (bench_config.db_path == "/data/rocksdb_bench" && !rocksdb_config.path.empty()) {
         bench_config.db_path = rocksdb_config.path;
     }
     

@@ -1,5 +1,5 @@
 {
-  "path": "/tmp/rocksdb_bench",
+  "path": "/data/rocksdb_bench",
   "create_if_missing": true,
   "max_open_files": 300,
   "write_buffer_size": 67108864,

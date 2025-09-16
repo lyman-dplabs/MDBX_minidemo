@@ -2,5 +2,5 @@
   "total_kv_pairs": 100000,
   "test_kv_pairs": 10000,
   "test_rounds": 3,
-  "db_path": "/tmp/bench_small"
+  "db_path": "/data/bench_small"
 }

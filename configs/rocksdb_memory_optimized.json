@@ -1,5 +1,5 @@
 {
-  "path": "/tmp/rocksdb_bench_mem",
+  "path": "/data/rocksdb_bench_mem",
   "create_if_missing": true,
   "max_open_files": 100,
   "write_buffer_size": 33554432,

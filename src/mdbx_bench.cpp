@@ -32,7 +32,7 @@ struct BenchConfig {
     size_t batch_size = 5000000;        // Batch size for database population (5M default)
     
     // Database path
-    std::string db_path = "/tmp/mdbx_bench";
+    std::string db_path = "/data/mdbx_bench";
 };
 
 // EnvConfig loader with JSON support
@@ -40,7 +40,7 @@ EnvConfig load_env_config(const std::string& config_file) {
     EnvConfig config;
     
     // Set defaults
-    config.path = "/tmp/mdbx_bench";
+    config.path = "/data/mdbx_bench";
     config.create = true;
     config.readonly = false;
     config.exclusive = false;
@@ -95,7 +95,7 @@ BenchConfig load_bench_config(const std::string& config_file) {
     config.test_kv_pairs = 100000;
     config.test_rounds = 2;
     config.batch_size = 5000000;  // 5M default batch size
-    config.db_path = "/tmp/mdbx_bench";
+    config.db_path = "/data/mdbx_bench";
     
     // Load from environment variables first
     if (const char* env_val = std::getenv("MDBX_BENCH_TOTAL_KV_PAIRS")) {
@@ -924,7 +924,7 @@ void print_usage(const char* program_name) {
     fmt::println("");
     fmt::println("Example EnvConfig JSON file:");
     fmt::println("{{");
-    fmt::println("  \"path\": \"/tmp/mdbx_bench\",");
+    fmt::println("  \"path\": \"/data/mdbx_bench\",");
     fmt::println("  \"max_size\": 8589934592,");
     fmt::println("  \"page_size\": 4096,");
     fmt::println("  \"max_tables\": 64,");
@@ -937,7 +937,7 @@ void print_usage(const char* program_name) {
     fmt::println("  \"test_kv_pairs\": 200000,");
     fmt::println("  \"test_rounds\": 5,");
     fmt::println("  \"batch_size\": 1000000,");
-    fmt::println("  \"db_path\": \"/tmp/mdbx_bench_custom\"");
+    fmt::println("  \"db_path\": \"/data/mdbx_bench_custom\"");
     fmt::println("  \"Note\": \"key_size and value_size are fixed at 32 bytes\"");
     fmt::println("}}");
 }
@@ -978,7 +978,7 @@ int main(int argc, char* argv[]) {
     BenchConfig bench_config = load_bench_config(bench_config_file);
     
     // Override db_path from env_config if not set in bench_config
-    if (bench_config.db_path == "/tmp/mdbx_bench" && !env_config.path.empty()) {
+    if (bench_config.db_path == "/data/mdbx_bench" && !env_config.path.empty()) {
         bench_config.db_path = env_config.path;
     }
     
