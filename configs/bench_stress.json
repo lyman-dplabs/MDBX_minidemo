@@ -1,0 +1,6 @@
+{
+  "total_kv_pairs": 10000000,
+  "test_kv_pairs": 1000000,
+  "test_rounds": 10,
+  "db_path": "/tmp/bench_stress"
+}

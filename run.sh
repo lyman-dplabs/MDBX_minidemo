@@ -68,6 +68,7 @@ RUN_BENCHMARK=false
 RUN_TESTS=false
 RUN_MDBX_DEMAND_TEST=false
 RUN_MDBX_BENCH=false
+RUN_ROCKSDB_BENCH=false
 VERBOSE=false
 PARALLEL_JOBS=$(nproc)
 
@@ -105,6 +106,7 @@ show_help() {
     echo -e "    --tests             Run unit tests (if available)"
     echo -e "    --test-demand       Run MDBX demand requirements test"
     echo -e "    --mdbx-bench        Run MDBX performance benchmark"
+    echo -e "    --rocksdb-bench     Run RocksDB performance benchmark"
     echo
     echo -e "${BOLD}BENCHMARK OPTIONS:${NC}"
     echo -e "    --filter PATTERN    Benchmark filter pattern (default: \"*\")"
@@ -178,6 +180,10 @@ parse_arguments() {
                 ;;
             --mdbx-bench)
                 RUN_MDBX_BENCH=true
+                shift
+                ;;
+            --rocksdb-bench)
+                RUN_ROCKSDB_BENCH=true
                 shift
                 ;;
             --jobs)
@@ -510,6 +516,35 @@ run_mdbx_bench() {
     fi
 }
 
+run_rocksdb_bench() {
+    log_step "Running RocksDB performance benchmark"
+    
+    if [[ "${ENABLE_ROCKSDB}" == "false" ]]; then
+        log_error "RocksDB support is not enabled. Use --rocksdb to enable RocksDB support."
+        return 1
+    fi
+    
+    if [[ ! -x "${BUILD_DIR}/rocksdb_bench" ]]; then
+        log_error "RocksDB benchmark executable not found. Build the project with --rocksdb first."
+        return 1
+    fi
+    
+    log_substep "Running RocksDB performance tests..."
+    echo
+    
+    cd "${BUILD_DIR}"
+    if ./rocksdb_bench; then
+        cd "${PROJECT_ROOT}"
+        echo
+        log_success "RocksDB benchmark completed"
+    else
+        cd "${PROJECT_ROOT}"
+        echo
+        log_error "RocksDB benchmark failed"
+        return 1
+    fi
+}
+
 # =============================================================================
 # Main Execution Flow
 # =============================================================================
@@ -587,6 +622,11 @@ main() {
         executed_something=true
     fi
     
+    if [[ "${RUN_ROCKSDB_BENCH}" == "true" ]]; then
+        run_rocksdb_bench
+        executed_something=true
+    fi
+    
     # Final message
     echo
     if [[ "${executed_something}" == "true" ]]; then
@@ -600,6 +640,7 @@ main() {
         log_info "  Tests:        $0 --tests"
         log_info "  MDBX Demand:  $0 --test-demand"
         log_info "  MDBX Bench:   $0 --mdbx-bench"
+        log_info "  RocksDB Bench: $0 --rocksdb --rocksdb-bench"
         log_info ""
         log_info "Use --help for more options."
     fi

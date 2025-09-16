@@ -1,0 +1,12 @@
+{
+  "path": "/tmp/rocksdb_bench_throughput",
+  "create_if_missing": true,
+  "max_open_files": 2000,
+  "write_buffer_size": 268435456,
+  "max_write_buffer_number": 6,
+  "target_file_size_base": 268435456,
+  "max_bytes_for_level_base": 1073741824,
+  "level0_file_num_compaction_trigger": 2,
+  "level0_slowdown_writes_trigger": 8,
+  "level0_stop_writes_trigger": 16
+}

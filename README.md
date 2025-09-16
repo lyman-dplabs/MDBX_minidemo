@@ -7,8 +7,8 @@
 本项目实现了一个区块链状态查询引擎，支持：
 - **MDBX**: 轻量级的嵌入式数据库（默认必需）
 - **RocksDB**: 高性能的键值存储数据库（可选）
-- 性能基准测试
-- 单元测试
+- 性能基准测试和专用基准测试工具
+- 单元测试和需求验证测试
 
 ## 快速开始
 
@@ -129,6 +129,7 @@ export BENCH_MAX_BLOCK_NUMBER=100000
 | `--tests` | 运行单元测试 |
 | `--test-demand` | 运行MDBX需求验证测试 |
 | `--mdbx-bench` | 运行MDBX性能基准测试 |
+| `--rocksdb-bench` | 运行RocksDB性能基准测试（需要 --rocksdb） |
 
 ### 基准测试选项
 
@@ -158,12 +159,19 @@ export BENCH_MAX_BLOCK_NUMBER=100000
 mdbx_demo/
 ├── run.sh                 # 主构建脚本
 ├── run_mdbx_bench.sh      # MDBX性能基准测试专用脚本
+├── run_rocksdb_bench.sh   # RocksDB性能基准测试专用脚本
+├── configs/               # 基准测试配置文件目录
+│   ├── README.md          # 配置文件使用说明
+│   ├── bench_*.json       # 通用基准测试配置文件
+│   ├── mdbx_env_*.json    # MDBX 环境配置文件
+│   └── rocksdb_*.json     # RocksDB 配置文件
 ├── CMakeLists.txt         # CMake 配置
 ├── vcpkg.json            # vcpkg 依赖配置
 ├── src/                  # 源代码
 │   ├── main.cpp          # 主程序入口
 │   ├── benchmark.cpp     # 基准测试
 │   ├── mdbx_bench.cpp    # MDBX性能基准测试工具
+│   ├── rocksdb_bench.cpp # RocksDB性能基准测试工具
 │   ├── core/             # 核心逻辑
 │   ├── db/               # 数据库实现
 │   └── utils/            # 工具函数
@@ -174,7 +182,8 @@ mdbx_demo/
 ├── build/                # 构建输出目录
 │   ├── mdbx_demo         # 主演示程序
 │   ├── benchmark_runner  # 性能基准测试
-│   └── mdbx_bench        # MDBX性能基准测试工具
+│   ├── mdbx_bench        # MDBX性能基准测试工具
+│   └── rocksdb_bench     # RocksDB性能基准测试工具
 ├── tests/                # 测试目录
 │   ├── integration/      # 集成测试
 │   │   └── test_mdbx_demand.cpp # MDBX需求验证测试
@@ -243,6 +252,172 @@ mdbx_demo/
 1. 在 `src/benchmark.cpp` 中添加新的测试用例
 2. 使用 Google Benchmark 框架
 3. 运行 `./run.sh --benchmark` 验证
+
+## 专用基准测试工具
+
+项目包含两个专门的数据库基准测试工具，用于深入评估数据库性能：
+
+### MDBX 性能基准测试工具 (mdbx_bench.cpp)
+
+专门的 MDBX 性能基准测试工具，模拟真实的读写工作负载。
+
+#### 核心功能
+- **大规模数据初始化**: 创建包含百万级 KV 对的数据库实例
+- **多轮随机测试**: 每轮从数据库中随机选择样本进行读写测试
+- **精确性能测量**: 分别测量读取时间和提交时间
+- **统计分析**: 提供完整的性能统计（平均值、最值、吞吐量等）
+- **灵活配置**: 支持命令行参数和配置文件自定义测试参数
+
+#### 使用方法
+
+```bash
+# 通过主脚本运行
+./run.sh --mdbx-bench
+
+# 通过专用脚本运行（推荐，支持更多选项）
+./run_mdbx_bench.sh
+
+# 使用预设配置文件
+./run_mdbx_bench.sh --config configs/mdbx_env_performance.json --bench-config configs/bench_large.json
+
+# 快速小规模测试
+./run_mdbx_bench.sh --bench-config configs/bench_small.json
+
+# 使用自定义配置
+./build/mdbx_bench -c config.json -b bench_config.json
+
+# 查看所有选项
+./build/mdbx_bench --help
+```
+
+#### 配置选项
+
+**命令行参数**:
+- `-c, --config FILE`: EnvConfig JSON 配置文件
+- `-b, --bench-config FILE`: BenchConfig JSON 配置文件  
+- `-h, --help`: 显示帮助信息
+
+**环境变量**:
+- `MDBX_BENCH_TOTAL_KV_PAIRS`: 数据库总KV对数（默认: 1,000,000）
+- `MDBX_BENCH_TEST_KV_PAIRS`: 每轮测试KV对数（默认: 100,000）
+- `MDBX_BENCH_TEST_ROUNDS`: 测试轮次（默认: 2）
+- `MDBX_BENCH_DB_PATH`: 数据库路径
+
+### RocksDB 性能基准测试工具 (rocksdb_bench.cpp)
+
+与 MDBX 工具完全对应的 RocksDB 性能基准测试工具，采用相同的测试逻辑和度量标准。
+
+#### 核心功能
+- **相同测试架构**: 与 mdbx_bench 完全相同的测试流程和统计方法
+- **RocksDB 优化**: 针对 RocksDB 特性优化的配置和批处理操作
+- **性能对比**: 便于与 MDBX 进行直接性能比较
+- **配置兼容**: 支持相同的配置文件格式和环境变量
+
+#### 使用方法
+
+```bash
+# 通过主脚本运行（需要启用RocksDB支持）
+./run.sh --rocksdb --rocksdb-bench
+
+# 通过专用脚本运行（推荐，支持更多选项）
+./run_rocksdb_bench.sh
+
+# 使用预设配置文件
+./run_rocksdb_bench.sh --config configs/rocksdb_high_throughput.json --bench-config configs/bench_large.json
+
+# 快速小规模测试
+./run_rocksdb_bench.sh --bench-config configs/bench_small.json
+
+# 使用自定义配置
+./build/rocksdb_bench -c rocksdb_config.json -b bench_config.json
+
+# 查看所有选项
+./build/rocksdb_bench --help
+```
+
+#### 配置选项
+
+**命令行参数**:
+- `-c, --config FILE`: RocksDBConfig JSON 配置文件
+- `-b, --bench-config FILE`: BenchConfig JSON 配置文件
+- `-h, --help`: 显示帮助信息
+
+**环境变量**:
+- `ROCKSDB_BENCH_TOTAL_KV_PAIRS`: 数据库总KV对数（默认: 1,000,000）
+- `ROCKSDB_BENCH_TEST_KV_PAIRS`: 每轮测试KV对数（默认: 100,000）
+- `ROCKSDB_BENCH_TEST_ROUNDS`: 测试轮次（默认: 2）
+- `ROCKSDB_BENCH_DB_PATH`: 数据库路径
+
+#### 预设配置文件
+
+项目提供了多种预设配置文件，位于 `configs/` 目录中：
+
+**MDBX 环境配置**:
+- `mdbx_env_default.json` - 默认配置 (4KB页面，8GB数据库)
+- `mdbx_env_performance.json` - 性能优化配置 (16KB页面，启用写映射)
+- `mdbx_env_memory.json` - 内存数据库配置
+
+**RocksDB 配置**:
+- `rocksdb_default.json` - 默认配置 (64MB写缓冲区)
+- `rocksdb_performance.json` - 性能优化配置 (128MB写缓冲区)
+- `rocksdb_memory_optimized.json` - 内存优化配置
+- `rocksdb_high_throughput.json` - 高吞吐量配置 (256MB写缓冲区)
+
+**基准测试配置**（两个工具通用）:
+- `bench_default.json` - 默认测试 (100万KV对，测试10万对)
+- `bench_small.json` - 快速测试 (10万KV对，测试1万对)
+- `bench_large.json` - 大规模测试 (500万KV对，测试50万对)
+- `bench_stress.json` - 极限测试 (1000万KV对，测试100万对)
+
+#### 测试逻辑
+
+两个基准测试工具采用完全相同的测试流程：
+
+1. **数据库初始化阶段**
+   - 创建包含指定数量（默认100万）个32字节KV对的数据库
+   - 批量写入数据并测量初始化时间
+
+2. **多轮性能测试阶段**
+   - 每轮随机选择指定数量（默认10万）个KV对进行测试
+   - **读取测试**: 测量随机读取操作的时间和成功率
+   - **更新测试**: 对读取的数据进行更新并测量提交时间
+   - 记录每轮的详细性能指标
+
+3. **统计分析阶段**
+   - 计算所有轮次的平均、最小、最大性能指标
+   - 输出读取吞吐量、提交延迟等关键性能数据
+   - 提供完整的性能分析报告
+
+#### 性能对比优势
+
+通过使用相同的测试逻辑和参数，可以获得：
+- **公平对比**: 相同的数据规模、测试模式和测量方法
+- **一致性**: 统一的性能指标和统计分析
+- **可重现**: 相同的配置系统和环境变量支持
+- **全面性**: 涵盖初始化、读取、更新等完整数据库操作
+- **预设场景**: 丰富的配置文件支持不同测试场景（小规模、大规模、高性能等）
+
+#### 快速开始示例
+
+```bash
+# 快速测试（开发调试）
+./run_mdbx_bench.sh --bench-config configs/bench_small.json
+./run_rocksdb_bench.sh --bench-config configs/bench_small.json
+
+# 标准性能测试
+./run_mdbx_bench.sh --config configs/mdbx_env_default.json --bench-config configs/bench_default.json
+./run_rocksdb_bench.sh --config configs/rocksdb_default.json --bench-config configs/bench_default.json
+
+# 高性能对比测试
+./run_mdbx_bench.sh --config configs/mdbx_env_performance.json --bench-config configs/bench_large.json
+./run_rocksdb_bench.sh --config configs/rocksdb_high_throughput.json --bench-config configs/bench_large.json
+
+# 极限压力测试
+./run_mdbx_bench.sh --config configs/mdbx_env_performance.json --bench-config configs/bench_stress.json
+./run_rocksdb_bench.sh --config configs/rocksdb_high_throughput.json --bench-config configs/bench_stress.json
+```
+
+详细的配置文件说明请参考 `configs/README.md`。
 
 ### 添加新的单元测试
 
@@ -539,271 +714,3 @@ void setup_environment() {
 
 该测试套件确保MDBX封装完全满足 `test_demand.md` 中定义的所有功能需求，为区块链状态存储提供可靠、高性能的数据库操作接口。
 
-## MDBX性能基准测试工具
-
-项目包含专门的MDBX性能基准测试工具 (`src/mdbx_bench.cpp`)，用于测试MDBX在实际工作负载下的性能表现。该工具模拟从1亿个键值对数据集中选择10万个32字节的键值对进行性能测试。
-
-### 测试场景
-
-根据 `bench_demand.md` 的规格，基准测试涵盖以下性能指标：
-
-#### 1. 写入性能测试
-- **数据规模**: 从100M个KV对中随机选择100K个进行测试
-- **数据格式**: 每个键和值都是32字节
-- **持久化级别**: Durable（完全持久化到磁盘）
-- **测量指标**: 
-  - 总写入时间
-  - Commit时间（专门测量事务提交耗时）
-  - 写入吞吐量（ops/sec）
-
-```cpp
-// 写入性能测试核心代码
-RWTxnManaged rw_txn(env);
-auto cursor = rw_txn.rw_cursor(table_config);
-
-for (const auto& [key, value] : dataset) {
-    cursor->insert(str_to_slice(key), str_to_slice(value));
-}
-
-// 专门测量commit时间
-auto commit_start = std::chrono::high_resolution_clock::now();
-rw_txn.commit_and_stop();
-auto commit_end = std::chrono::high_resolution_clock::now();
-```
-
-#### 2. 随机读取性能测试
-- **读取模式**: 从已写入的数据中随机读取
-- **读取次数**: 默认10,000次随机读取
-- **测量指标**:
-  - 总读取时间
-  - 读取吞吐量（ops/sec）
-  - 平均读取延迟
-  - 成功读取率
-
-```cpp
-// 随机读取性能测试
-ROTxnManaged ro_txn(env);
-auto cursor = ro_txn.ro_cursor(table_config);
-
-for (size_t idx : random_indices) {
-    const auto& key = dataset[idx].first;
-    auto result = cursor->find(str_to_slice(key));
-    if (result.done) successful_reads++;
-}
-```
-
-#### 3. 更新性能测试
-- **更新模式**: 纯更新操作（非多版本）
-- **更新次数**: 默认10,000次随机更新
-- **测量指标**:
-  - 总更新时间
-  - 更新Commit时间
-  - 更新吞吐量（ops/sec）
-
-```cpp
-// 更新性能测试
-RWTxnManaged rw_txn(env);
-auto cursor = rw_txn.rw_cursor(table_config);
-
-for (size_t idx : update_indices) {
-    const auto& key = dataset[idx].first;
-    std::string new_value = generate_value(idx + 999999);
-    cursor->upsert(str_to_slice(key), str_to_slice(new_value));
-}
-
-rw_txn.commit_and_stop();
-```
-
-### 配置系统
-
-#### 使用默认配置
-```bash
-# 使用默认配置运行基准测试
-./run.sh --mdbx-bench
-
-# 或者直接使用专用脚本
-./run_mdbx_bench.sh
-```
-
-#### 自定义EnvConfig配置
-
-工具支持通过JSON配置文件自定义MDBX环境参数：
-
-```bash
-# 创建示例配置文件
-./run_mdbx_bench.sh --sample-config
-
-# 使用自定义配置
-./run_mdbx_bench.sh --config mdbx_bench_config.json
-```
-
-#### 配置文件格式
-
-```json
-{
-  "path": "/tmp/mdbx_bench",
-  "create": true,
-  "readonly": false,
-  "exclusive": false,
-  "in_memory": false,
-  "shared": false,
-  "read_ahead": false,
-  "write_map": false,
-  "page_size": 4096,
-  "max_size": 8589934592,
-  "growth_size": 1073741824,
-  "max_tables": 64,
-  "max_readers": 100
-}
-```
-
-#### 配置参数说明
-
-| 参数 | 说明 | 默认值 | 建议值 |
-|------|------|--------|---------|
-| `path` | 数据库文件路径 | `/tmp/mdbx_bench` | 使用SSD路径 |
-| `max_size` | 最大数据库大小(字节) | 8GB | 根据数据量调整 |
-| `page_size` | MDBX页面大小(字节) | 4096 | 4096/8192/16384 |
-| `growth_size` | 自动扩展大小(字节) | 1GB | 根据写入模式调整 |
-| `max_readers` | 最大并发读者数 | 100 | 根据并发需求调整 |
-| `write_map` | 启用写映射模式 | false | 可提升写性能 |
-| `read_ahead` | 启用预读功能 | false | 顺序访问时启用 |
-
-### 性能优化建议
-
-#### 存储配置优化
-```json
-{
-  "page_size": 16384,        // 更大页面，减少B-tree深度
-  "max_size": 17179869184,   // 16GB，避免频繁扩展
-  "growth_size": 2147483648, // 2GB增量，减少扩展次数
-  "write_map": true,         // 启用写映射，提升写性能
-  "read_ahead": false        // 随机访问时禁用预读
-}
-```
-
-#### 系统优化建议
-- **存储**: 使用NVMe SSD以获得最佳I/O性能
-- **内存**: 确保有足够内存容纳工作集
-- **文件系统**: 使用ext4或xfs，启用noatime挂载选项
-- **内核**: 调整`vm.dirty_ratio`和`vm.dirty_background_ratio`
-
-### 运行基准测试
-
-#### 基本用法
-```bash
-# 通过主构建脚本运行
-./run.sh --mdbx-bench
-
-# 通过专用脚本运行（推荐）
-./run_mdbx_bench.sh
-
-# 只运行基准测试，跳过构建
-./run_mdbx_bench.sh --run-only
-```
-
-#### 高级用法
-```bash
-# 清理构建并运行
-./run_mdbx_bench.sh --clean
-
-# 使用Debug模式构建
-./run_mdbx_bench.sh --debug
-
-# 使用自定义配置
-./run_mdbx_bench.sh --config my_config.json
-
-# 生成示例配置文件
-./run_mdbx_bench.sh --sample-config
-```
-
-### 测试环境
-
-#### 硬件配置
-- **CPU**: AMD EPYC 7K62 48-Core Processor
-  - 核心数: 48核
-  - 基础频率: 1.5 GHz
-  - 最大频率: 2.6 GHz
-  - 缓存: L1d 1.5MB, L1i 1.5MB, L2 24MB, L3 192MB
-- **内存**: 128GB (131,754,456 kB)
-  - 可用内存: 45GB
-  - 交换空间: 976MB
-- **存储**: NVMe SSD 1.8TB
-  - 文件系统: ext4
-  - 可用空间: 678GB
-- **操作系统**: Debian 12 (Linux 6.1.0-37-amd64)
-
-#### 实际测试结果
-```
-=== MDBX Performance Benchmark ===
-✓ Generated 100000 test KV pairs
-  Key size: 32 bytes
-  Value size: 32 bytes
-
-=== Write Performance Benchmark ===
-✓ Commit time: 15 ms
-✓ Total write time: 80 ms
-✓ Write throughput: 1250000.00 ops/sec
-
-=== Random Read Performance Benchmark ===
-✓ Successful reads: 10000/10000
-✓ Total read time: 7 ms
-✓ Read throughput: 1428571.43 ops/sec
-✓ Average read latency: 0.001 ms
-
-=== Update Performance Benchmark ===
-✓ Update commit time: 15 ms
-✓ Total update time: 29 ms
-✓ Update throughput: 344827.59 ops/sec
-```
-
-#### 性能指标分析
-
-**写入性能**:
-- **Commit时间**: 反映数据持久化到磁盘的耗时
-- **总写入时间**: 包含数据处理和提交的完整耗时
-- **写入吞吐量**: 每秒能处理的写入操作数
-
-**读取性能**:
-- **读取吞吐量**: 每秒能处理的查询操作数
-- **平均延迟**: 单次查询的平均响应时间
-- **成功率**: 查询命中率（应该是100%）
-
-**更新性能**:
-- **更新吞吐量**: 每秒能处理的更新操作数
-- **更新提交时间**: 更新操作的持久化耗时
-
-### 故障排除
-
-#### 常见问题
-
-**问题1**: 编译错误 - jsoncpp库未找到
-```bash
-# 解决方案：确保vcpkg正确安装了jsoncpp
-./third_party/vcpkg/vcpkg install jsoncpp
-```
-
-**问题2**: 运行时路径权限错误
-```bash
-# 解决方案：使用有写权限的路径，或修改配置文件中的path
-{
-  "path": "/home/user/mdbx_bench_data"
-}
-```
-
-**问题3**: 性能异常低下
-```bash
-# 解决方案：检查存储设备、文件系统配置
-# 避免在网络文件系统上运行基准测试
-# 确保数据库路径在本地SSD上
-```
-
-**问题4**: 内存不足
-```bash
-# 解决方案：减少max_size或使用更大内存的机器
-{
-  "max_size": 2147483648  // 2GB instead of 8GB
-}
-```
-
-该基准测试工具为MDBX在区块链状态存储场景下的性能评估提供了全面、准确的测试框架。

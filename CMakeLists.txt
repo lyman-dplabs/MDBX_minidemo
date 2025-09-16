@@ -164,13 +164,32 @@ target_link_libraries(mdbx_bench PRIVATE
     JsonCpp::JsonCpp
 )
 
+# --- RocksDB Bench Executable ---
+# This is the RocksDB performance benchmark tool (only build if RocksDB is enabled)
+if(ENABLE_ROCKSDB)
+    add_executable(rocksdb_bench
+        src/rocksdb_bench.cpp
+        src/utils/string_utils.cpp
+    )
+    target_link_libraries(rocksdb_bench PRIVATE
+        core_logic
+        JsonCpp::JsonCpp
+        RocksDB::rocksdb
+    )
+endif()
+
 # --- Test Suite ---
 # All test configurations are now managed in tests/CMakeLists.txt
 # This provides better organization and separation of concerns
 add_subdirectory(tests)
 
 # --- Installation Rules (Optional) ---
-install(TARGETS mdbx_demo benchmark_runner mdbx_bench
+set(INSTALL_TARGETS mdbx_demo benchmark_runner mdbx_bench)
+if(ENABLE_ROCKSDB)
+    list(APPEND INSTALL_TARGETS rocksdb_bench)
+endif()
+
+install(TARGETS ${INSTALL_TARGETS}
     RUNTIME DESTINATION bin
 )
 install(TARGETS core_logic

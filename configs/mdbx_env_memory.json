@@ -1,0 +1,15 @@
+{
+  "path": "/tmp/mdbx_bench_mem",
+  "create": true,
+  "readonly": false,
+  "exclusive": false,
+  "in_memory": true,
+  "shared": false,
+  "read_ahead": false,
+  "write_map": false,
+  "page_size": 4096,
+  "max_size": 4294967296,
+  "growth_size": 536870912,
+  "max_tables": 32,
+  "max_readers": 50
+}
