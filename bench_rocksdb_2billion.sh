@@ -45,7 +45,7 @@ readonly LOGS_DIR="${PROJECT_ROOT}/logs"
 readonly TOTAL_KV_PAIRS=2000000000  # 20亿
 readonly TEST_KV_PAIRS=100000       # 10万
 readonly TEST_ROUNDS=100            # 100次
-readonly DB_PATH="/tmp/rocksdb_bench_2billion"
+readonly DB_PATH="/data/rocksdb_bench_2billion"
 
 # Generate timestamp for log files
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")

@@ -1,5 +1,5 @@
 {
-  "path": "/tmp/mdbx_bench_2billion",
+  "path": "/data/mdbx_bench_2billion",
   "create": true,
   "readonly": false,
   "exclusive": false,
