@@ -212,6 +212,10 @@ run_benchmark() {
     local args=()
     
     if [[ -n "${CONFIG_FILE}" ]]; then
+        # Convert relative path to absolute path if needed
+        if [[ "${CONFIG_FILE}" != /* ]]; then
+            CONFIG_FILE="${PROJECT_ROOT}/${CONFIG_FILE}"
+        fi
         if [[ ! -f "${CONFIG_FILE}" ]]; then
             log_error "RocksDB config file not found: ${CONFIG_FILE}"
             exit 1
@@ -223,6 +227,10 @@ run_benchmark() {
     fi
     
     if [[ -n "${BENCH_CONFIG_FILE}" ]]; then
+        # Convert relative path to absolute path if needed
+        if [[ "${BENCH_CONFIG_FILE}" != /* ]]; then
+            BENCH_CONFIG_FILE="${PROJECT_ROOT}/${BENCH_CONFIG_FILE}"
+        fi
         if [[ ! -f "${BENCH_CONFIG_FILE}" ]]; then
             log_error "Bench config file not found: ${BENCH_CONFIG_FILE}"
             exit 1

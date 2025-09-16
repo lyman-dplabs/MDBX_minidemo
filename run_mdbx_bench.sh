@@ -44,6 +44,7 @@ BUILD_TYPE="Release"
 CLEAN_BUILD=false
 RUN_ONLY=false
 CONFIG_FILE=""
+BENCH_CONFIG_FILE=""
 CREATE_SAMPLE_CONFIG=false
 
 show_help() {
@@ -58,8 +59,9 @@ show_help() {
     echo -e "    --run-only          Skip build, only run existing benchmark"
     echo
     echo -e "${BOLD}BENCHMARK OPTIONS:${NC}"
-    echo -e "    -c, --config FILE   Path to EnvConfig JSON file"
-    echo -e "    --sample-config     Create a sample config file and exit"
+    echo -e "    -c, --config FILE      Path to EnvConfig JSON file"
+    echo -e "    -b, --bench-config FILE Path to BenchConfig JSON file"
+    echo -e "    --sample-config        Create a sample config file and exit"
     echo
     echo -e "${BOLD}EXAMPLES:${NC}"
     echo -e "    # Basic build and run with default config"
@@ -67,6 +69,9 @@ show_help() {
     echo
     echo -e "    # Run with custom config"
     echo -e "    $0 --config my_config.json"
+    echo
+    echo -e "    # Run with both env and bench configs"
+    echo -e "    $0 --config env_config.json --bench-config bench_config.json"
     echo
     echo -e "    # Clean release build"
     echo -e "    $0 --clean"
@@ -130,6 +135,10 @@ parse_arguments() {
                 CONFIG_FILE="$2"
                 shift 2
                 ;;
+            -b|--bench-config)
+                BENCH_CONFIG_FILE="$2"
+                shift 2
+                ;;
             --sample-config)
                 CREATE_SAMPLE_CONFIG=true
                 shift
@@ -185,6 +194,10 @@ run_benchmark() {
     
     local args=()
     if [[ -n "${CONFIG_FILE}" ]]; then
+        # Convert relative path to absolute path if needed
+        if [[ "${CONFIG_FILE}" != /* ]]; then
+            CONFIG_FILE="${PROJECT_ROOT}/${CONFIG_FILE}"
+        fi
         if [[ ! -f "${CONFIG_FILE}" ]]; then
             log_error "Config file not found: ${CONFIG_FILE}"
             exit 1
@@ -193,6 +206,19 @@ run_benchmark() {
         log_info "Using config file: ${CONFIG_FILE}"
     else
         log_info "Using default configuration"
+    fi
+    
+    if [[ -n "${BENCH_CONFIG_FILE}" ]]; then
+        # Convert relative path to absolute path if needed
+        if [[ "${BENCH_CONFIG_FILE}" != /* ]]; then
+            BENCH_CONFIG_FILE="${PROJECT_ROOT}/${BENCH_CONFIG_FILE}"
+        fi
+        if [[ ! -f "${BENCH_CONFIG_FILE}" ]]; then
+            log_error "Bench config file not found: ${BENCH_CONFIG_FILE}"
+            exit 1
+        fi
+        args+=("--bench-config" "${BENCH_CONFIG_FILE}")
+        log_info "Using bench config file: ${BENCH_CONFIG_FILE}"
     fi
     
     echo

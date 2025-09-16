@@ -558,11 +558,15 @@ RoundResult perform_mixed_test(::mdbx::env_managed& env, size_t round_number, co
                  config.test_kv_pairs, config.total_kv_pairs);
     auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
     
-    // Calculate 80:20 ratio
-    size_t read_count = static_cast<size_t>(config.test_kv_pairs * 0.8);
-    size_t write_count = config.test_kv_pairs - read_count;
+    // Calculate 8:2 ratio (every 8 reads followed by 2 writes)
+    size_t batch_size = 10; // 8 reads + 2 writes = 10 operations per batch
+    size_t num_batches = config.test_kv_pairs / batch_size;
+    size_t remaining_ops = config.test_kv_pairs % batch_size;
     
-    fmt::println("Mixed operations: {} reads, {} writes", read_count, write_count);
+    size_t read_count = num_batches * 8 + std::min(remaining_ops, static_cast<size_t>(8));
+    size_t write_count = num_batches * 2 + std::max(static_cast<int>(remaining_ops) - 8, 0);
+    
+    fmt::println("Mixed operations: {} reads, {} writes (8:2 pattern)", read_count, write_count);
     
     result.read_latencies_us.reserve(read_count);
     result.write_latencies_us.reserve(write_count);
@@ -574,13 +578,14 @@ RoundResult perform_mixed_test(::mdbx::env_managed& env, size_t round_number, co
         RWTxnManaged rw_txn(env);
         auto cursor = rw_txn.rw_cursor(table_config);
         
-        // Perform mixed operations with interleaved reads and writes
-        for (size_t i = 0; i < config.test_kv_pairs; ++i) {
-            size_t index = test_indices[i];
-            std::string key = generate_key(index);
-            
-            if (i < read_count) {
-                // Read operation
+        // Perform mixed operations with 8:2 pattern
+        size_t op_index = 0;
+        for (size_t batch = 0; batch < num_batches; ++batch) {
+            // 8 reads in this batch
+            for (int read_in_batch = 0; read_in_batch < 8 && op_index < config.test_kv_pairs; ++read_in_batch) {
+                size_t index = test_indices[op_index];
+                std::string key = generate_key(index);
+                
                 auto op_start = std::chrono::high_resolution_clock::now();
                 auto find_result = cursor->find(str_to_slice(key), false);
                 auto op_end = std::chrono::high_resolution_clock::now();
@@ -593,6 +598,47 @@ RoundResult perform_mixed_test(::mdbx::env_managed& env, size_t round_number, co
                     op_end - op_start).count();
                 result.read_latencies_us.push_back(latency_us);
                 
+                op_index++;
+            }
+            
+            // 2 writes in this batch
+            for (int write_in_batch = 0; write_in_batch < 2 && op_index < config.test_kv_pairs; ++write_in_batch) {
+                size_t index = test_indices[op_index];
+                std::string key = generate_key(index);
+                std::string new_value = generate_value(index + round_number * 1000000);
+                
+                auto op_start = std::chrono::high_resolution_clock::now();
+                cursor->upsert(str_to_slice(key), str_to_slice(new_value));
+                auto op_end = std::chrono::high_resolution_clock::now();
+                
+                result.successful_writes++;
+                
+                double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                    op_end - op_start).count();
+                result.write_latencies_us.push_back(latency_us);
+                
+                op_index++;
+            }
+        }
+        
+        // Handle remaining operations (if any)
+        while (op_index < config.test_kv_pairs) {
+            size_t index = test_indices[op_index];
+            std::string key = generate_key(index);
+            
+            if (op_index % batch_size < 8) {
+                // Read operation
+                auto op_start = std::chrono::high_resolution_clock::now();
+                auto find_result = cursor->find(str_to_slice(key), false);
+                auto op_end = std::chrono::high_resolution_clock::now();
+                
+                if (find_result.done) {
+                    result.successful_reads++;
+                }
+                
+                double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
+                    op_end - op_start).count();
+                result.read_latencies_us.push_back(latency_us);
             } else {
                 // Write operation
                 std::string new_value = generate_value(index + round_number * 1000000);
@@ -607,6 +653,8 @@ RoundResult perform_mixed_test(::mdbx::env_managed& env, size_t round_number, co
                     op_end - op_start).count();
                 result.write_latencies_us.push_back(latency_us);
             }
+            
+            op_index++;
         }
         
         // Measure commit time
