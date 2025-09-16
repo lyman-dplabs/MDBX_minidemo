@@ -11,18 +11,18 @@
 #include <fstream>
 #include <unordered_set>
 #include <json/json.h>
+#include <cstdlib>
 
 using namespace datastore::kvdb;
 using namespace utils;
 
 // Configuration structure for benchmark parameters
-// TODO: Make it configurable by command line arguments
 struct BenchConfig {
     // Data parameters
     size_t total_kv_pairs = 1000000;    // 1M total KV pairs in database
     size_t test_kv_pairs = 100000;      // 100K KV pairs to test per round
-    size_t key_size = 32;               // 32-byte keys
-    size_t value_size = 32;             // 32-byte values
+    static constexpr size_t key_size = 32;    // Fixed 32-byte keys
+    static constexpr size_t value_size = 32;  // Fixed 32-byte values
     
     // Test parameters
     size_t test_rounds = 2;             // Number of test rounds to run
@@ -82,19 +82,88 @@ EnvConfig load_env_config(const std::string& config_file) {
     return config;
 }
 
+// BenchConfig loader with JSON and environment variable support
+BenchConfig load_bench_config(const std::string& config_file) {
+    BenchConfig config;
+    
+    // Set defaults
+    config.total_kv_pairs = 1000000;
+    config.test_kv_pairs = 100000;
+    config.test_rounds = 2;
+    config.db_path = "/tmp/mdbx_bench";
+    
+    // Load from environment variables first
+    if (const char* env_val = std::getenv("MDBX_BENCH_TOTAL_KV_PAIRS")) {
+        try {
+            config.total_kv_pairs = std::stoull(env_val);
+        } catch (const std::exception& e) {
+            fmt::println("⚠ Invalid MDBX_BENCH_TOTAL_KV_PAIRS: {}", env_val);
+        }
+    }
+    
+    if (const char* env_val = std::getenv("MDBX_BENCH_TEST_KV_PAIRS")) {
+        try {
+            config.test_kv_pairs = std::stoull(env_val);
+        } catch (const std::exception& e) {
+            fmt::println("⚠ Invalid MDBX_BENCH_TEST_KV_PAIRS: {}", env_val);
+        }
+    }
+    
+    if (const char* env_val = std::getenv("MDBX_BENCH_TEST_ROUNDS")) {
+        try {
+            config.test_rounds = std::stoull(env_val);
+        } catch (const std::exception& e) {
+            fmt::println("⚠ Invalid MDBX_BENCH_TEST_ROUNDS: {}", env_val);
+        }
+    }
+    
+    if (const char* env_val = std::getenv("MDBX_BENCH_DB_PATH")) {
+        config.db_path = env_val;
+    }
+    
+    // Try to load from file if it exists (overrides environment variables)
+    if (!config_file.empty() && std::filesystem::exists(config_file)) {
+        try {
+            std::ifstream file(config_file);
+            Json::Value root;
+            file >> root;
+            
+            if (root.isMember("total_kv_pairs")) config.total_kv_pairs = root["total_kv_pairs"].asUInt64();
+            if (root.isMember("test_kv_pairs")) config.test_kv_pairs = root["test_kv_pairs"].asUInt64();
+            if (root.isMember("test_rounds")) config.test_rounds = root["test_rounds"].asUInt64();
+            if (root.isMember("db_path")) config.db_path = root["db_path"].asString();
+            
+            // Ignore key_size and value_size from config file since they are fixed
+            if (root.isMember("key_size") || root.isMember("value_size")) {
+                fmt::println("⚠ key_size and value_size are fixed at 32 bytes, ignoring config file values");
+            }
+            
+            fmt::println("✓ Loaded BenchConfig from: {}", config_file);
+        } catch (const std::exception& e) {
+            fmt::println("⚠ Failed to load BenchConfig file {}, using environment/defaults: {}", config_file, e.what());
+        }
+    } else if (!config_file.empty()) {
+        fmt::println("⚠ BenchConfig file not found: {}, using environment/defaults", config_file);
+    } else {
+        fmt::println("✓ Using default BenchConfig (no file specified)");
+    }
+    
+    return config;
+}
+
 // Generate a fixed 32-byte key from an index
-std::string generate_key(size_t index, size_t key_size = 32) {
+std::string generate_key(size_t index) {
     std::string key = fmt::format("key_{:016x}", index);
-    // Pad or truncate to exactly key_size bytes
-    key.resize(key_size, '0');
+    // Pad or truncate to exactly 32 bytes
+    key.resize(32, '0');
     return key;
 }
 
 // Generate a fixed 32-byte value from an index
-std::string generate_value(size_t index, size_t value_size = 32) {
+std::string generate_value(size_t index) {
     std::string value = fmt::format("value_{:016x}_data", index);
-    // Pad or truncate to exactly value_size bytes
-    value.resize(value_size, 'x');
+    // Pad or truncate to exactly 32 bytes
+    value.resize(32, 'x');
     return value;
 }
 
@@ -112,8 +181,8 @@ void populate_database(::mdbx::env_managed& env, const BenchConfig& config) {
         auto cursor = rw_txn.rw_cursor(table_config);
         
         for (size_t i = 0; i < config.total_kv_pairs; ++i) {
-            std::string key = generate_key(i, config.key_size);
-            std::string value = generate_value(i, config.value_size);
+            std::string key = generate_key(i);
+            std::string value = generate_value(i);
             cursor->insert(str_to_slice(key), str_to_slice(value));
             
             // Progress indicator for large datasets
@@ -137,8 +206,8 @@ void populate_database(::mdbx::env_managed& env, const BenchConfig& config) {
     
     fmt::println("✓ Database populated with {} KV pairs in {} seconds", 
                  config.total_kv_pairs, total_duration);
-    fmt::println("  Key size: {} bytes", config.key_size);
-    fmt::println("  Value size: {} bytes", config.value_size);
+    fmt::println("  Key size: {} bytes", BenchConfig::key_size);
+    fmt::println("  Value size: {} bytes", BenchConfig::value_size);
 }
 
 // Generate random indices for testing
@@ -196,7 +265,7 @@ RoundResult perform_test_round(::mdbx::env_managed& env, size_t round_number, co
         
         result.successful_reads = 0;
         for (size_t index : test_indices) {
-            std::string key = generate_key(index, config.key_size);
+            std::string key = generate_key(index);
             auto find_result = cursor->find(str_to_slice(key), false);
             if (find_result.done) {
                 std::string value = std::string(find_result.value.as_string());
@@ -225,7 +294,7 @@ RoundResult perform_test_round(::mdbx::env_managed& env, size_t round_number, co
         for (size_t i = 0; i < read_data.size(); ++i) {
             const auto& [key, old_value] = read_data[i];
             // Generate a new value for update (add round number to make it unique)
-            std::string new_value = generate_value(i + round_number * 1000000, config.value_size);
+            std::string new_value = generate_value(i + round_number * 1000000);
             cursor->upsert(str_to_slice(key), str_to_slice(new_value));
         }
         
@@ -322,8 +391,15 @@ void print_usage(const char* program_name) {
     fmt::println("Usage: {} [options]", program_name);
     fmt::println("Options:");
     fmt::println("  -c, --config FILE    Path to EnvConfig JSON file");
-    fmt::println("  -r, --rounds N       Number of test rounds to run (default: 2)");
+    fmt::println("  -b, --bench-config FILE  Path to BenchConfig JSON file");
     fmt::println("  -h, --help          Show this help message");
+    fmt::println("");
+    fmt::println("Environment Variables:");
+    fmt::println("  MDBX_BENCH_TOTAL_KV_PAIRS  Total KV pairs in database");
+    fmt::println("  MDBX_BENCH_TEST_KV_PAIRS   KV pairs to test per round");
+    fmt::println("  MDBX_BENCH_TEST_ROUNDS     Number of test rounds");
+    fmt::println("  MDBX_BENCH_DB_PATH         Database path");
+    fmt::println("  Note: Key and value sizes are fixed at 32 bytes");
     fmt::println("");
     fmt::println("Example EnvConfig JSON file:");
     fmt::println("{{");
@@ -333,11 +409,20 @@ void print_usage(const char* program_name) {
     fmt::println("  \"max_tables\": 64,");
     fmt::println("  \"max_readers\": 100");
     fmt::println("}}");
+    fmt::println("");
+    fmt::println("Example BenchConfig JSON file:");
+    fmt::println("{{");
+    fmt::println("  \"total_kv_pairs\": 2000000,");
+    fmt::println("  \"test_kv_pairs\": 200000,");
+    fmt::println("  \"test_rounds\": 5,");
+    fmt::println("  \"db_path\": \"/tmp/mdbx_bench_custom\"");
+    fmt::println("  \"Note\": \"key_size and value_size are fixed at 32 bytes\"");
+    fmt::println("}}");
 }
 
 int main(int argc, char* argv[]) {
     std::string config_file;
-    BenchConfig bench_config;  // Initialize with defaults
+    std::string bench_config_file;
     
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -349,20 +434,11 @@ int main(int argc, char* argv[]) {
                 fmt::println(stderr, "Error: --config requires a file path");
                 return 1;
             }
-        } else if (arg == "-r" || arg == "--rounds") {
+        } else if (arg == "-b" || arg == "--bench-config") {
             if (i + 1 < argc) {
-                try {
-                    bench_config.test_rounds = std::stoull(argv[++i]);
-                    if (bench_config.test_rounds == 0) {
-                        fmt::println(stderr, "Error: rounds must be greater than 0");
-                        return 1;
-                    }
-                } catch (const std::exception& e) {
-                    fmt::println(stderr, "Error: invalid rounds value: {}", argv[i]);
-                    return 1;
-                }
+                bench_config_file = argv[++i];
             } else {
-                fmt::println(stderr, "Error: --rounds requires a number");
+                fmt::println(stderr, "Error: --bench-config requires a file path");
                 return 1;
             }
         } else if (arg == "-h" || arg == "--help") {
@@ -375,17 +451,24 @@ int main(int argc, char* argv[]) {
         }
     }
     
+    // Load configurations
+    EnvConfig env_config = load_env_config(config_file);
+    BenchConfig bench_config = load_bench_config(bench_config_file);
+    
+    // Override db_path from env_config if not set in bench_config
+    if (bench_config.db_path == "/tmp/mdbx_bench" && !env_config.path.empty()) {
+        bench_config.db_path = env_config.path;
+    }
+    
     fmt::println("=== MDBX Performance Benchmark ===");
-    fmt::println("Testing MDBX performance with 32-byte KV pairs");
+    fmt::println("Testing MDBX performance with {}-byte keys and {}-byte values", 
+                 BenchConfig::key_size, BenchConfig::value_size);
     fmt::println("Total KV pairs in DB: {}", bench_config.total_kv_pairs);
     fmt::println("KV pairs per test round: {}", bench_config.test_kv_pairs);
     fmt::println("Number of test rounds: {}", bench_config.test_rounds);
+    fmt::println("Database path: {}", bench_config.db_path);
     
     try {
-        // Load configuration
-        EnvConfig env_config = load_env_config(config_file);
-        bench_config.db_path = env_config.path;
-        
         // Setup environment
         setup_environment(bench_config.db_path);
         
