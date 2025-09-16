@@ -36,6 +36,14 @@ log_step() {
     echo -e "\n${PURPLE}▶${NC} ${BOLD}$*${NC}"
 }
 
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $*"
+}
+
+log_critical() {
+    echo -e "${RED}[CRITICAL]${NC} $*"
+}
+
 # Project configuration
 readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly BUILD_DIR="${PROJECT_ROOT}/build"
@@ -59,6 +67,10 @@ RUN_ONLY=false
 CONFIG_FILE=""
 BENCH_CONFIG_FILE=""
 
+# MDBX mapsize requirements for 2 billion KV pairs
+readonly REQUIRED_MAPSIZE_2B=214748364800  # 200GB in bytes
+readonly RECOMMENDED_CONFIG="configs/mdbx_env_2billion.json"
+
 show_help() {
     echo -e "${BOLD}MDBX 20亿KV基准测试脚本${NC}"
     echo
@@ -80,19 +92,28 @@ show_help() {
     echo -e "    Test rounds:    ${TEST_ROUNDS} (100次)"
     echo -e "    Database path:  ${DB_PATH}"
     echo
+    echo -e "${BOLD}CRITICAL REQUIREMENTS:${NC}"
+    echo -e "    ${RED}MDBX mapsize: 200GB minimum (214,748,364,800 bytes)${NC}"
+    echo -e "    ${RED}System RAM:   200GB+ recommended${NC}"
+    echo -e "    ${RED}Disk space:   200GB+ required${NC}"
+    echo -e "    ${RED}Architecture: 64-bit system required${NC}"
+    echo
     echo -e "${BOLD}OUTPUT:${NC}"
     echo -e "    Log file:       ${LOG_FILE}"
     echo -e "    Summary file:   ${SUMMARY_FILE}"
     echo
     echo -e "${BOLD}EXAMPLES:${NC}"
-    echo -e "    # Run with default config"
+    echo -e "    # Run with recommended config (200GB mapsize)"
     echo -e "    $0"
     echo
-    echo -e "    # Run with custom config"
-    echo -e "    $0 --config configs/mdbx_env_performance.json"
+    echo -e "    # Run with custom config (ensure mapsize >= 200GB)"
+    echo -e "    $0 --config configs/mdbx_env_2billion.json"
     echo
     echo -e "    # Run with both configs"
-    echo -e "    $0 --config configs/mdbx_env_performance.json --bench-config configs/bench_2billion.json"
+    echo -e "    $0 --config configs/mdbx_env_2billion.json --bench-config configs/bench_2billion.json"
+    echo
+    echo -e "${BOLD}WARNING:${NC}"
+    echo -e "    ${YELLOW}Using configs with mapsize < 200GB will cause MDBX_MAP_FULL error!${NC}"
     echo
 }
 
@@ -130,6 +151,68 @@ parse_arguments() {
                 ;;
         esac
     done
+}
+
+# Validate MDBX mapsize configuration
+validate_mapsize_config() {
+    local config_file="$1"
+    
+    if [[ ! -f "${config_file}" ]]; then
+        log_error "Config file not found: ${config_file}"
+        return 1
+    fi
+    
+    # Extract max_size from JSON config
+    local max_size
+    max_size=$(grep -o '"max_size"[[:space:]]*:[[:space:]]*[0-9]*' "${config_file}" | grep -o '[0-9]*$')
+    
+    if [[ -z "${max_size}" ]]; then
+        log_error "Could not find max_size in config file: ${config_file}"
+        return 1
+    fi
+    
+    log_info "Config file max_size: ${max_size} bytes ($((max_size / 1024 / 1024 / 1024))GB)"
+    log_info "Required max_size for 2B KV pairs: ${REQUIRED_MAPSIZE_2B} bytes ($((REQUIRED_MAPSIZE_2B / 1024 / 1024 / 1024))GB)"
+    
+    if [[ "${max_size}" -lt "${REQUIRED_MAPSIZE_2B}" ]]; then
+        log_critical "MDBX mapsize is too small for 2 billion KV pairs!"
+        log_critical "Current max_size: ${max_size} bytes ($((max_size / 1024 / 1024 / 1024))GB)"
+        log_critical "Required max_size: ${REQUIRED_MAPSIZE_2B} bytes ($((REQUIRED_MAPSIZE_2B / 1024 / 1024 / 1024))GB)"
+        log_critical "This will cause MDBX_MAP_FULL error during testing!"
+        echo
+        log_warning "Recommendation: Use the provided config file: ${RECOMMENDED_CONFIG}"
+        log_warning "Or manually set max_size to at least ${REQUIRED_MAPSIZE_2B} bytes in your config"
+        echo
+        return 1
+    fi
+    
+    log_success "MDBX mapsize configuration is adequate for 2 billion KV pairs"
+    return 0
+}
+
+# Display mapsize requirements warning
+show_mapsize_warning() {
+    echo
+    log_critical "⚠️  CRITICAL: MDBX Mapsize Requirements for 2 Billion KV Pairs ⚠️"
+    echo
+    echo -e "${BOLD}Memory Requirements:${NC}"
+    echo -e "  • Each KV pair: 64 bytes (32-byte key + 32-byte value)"
+    echo -e "  • 2 billion KV pairs: ~128GB raw data"
+    echo -e "  • MDBX overhead: ~30% additional space"
+    echo -e "  • ${BOLD}Required mapsize: 200GB (214,748,364,800 bytes)${NC}"
+    echo
+    echo -e "${BOLD}Configuration:${NC}"
+    echo -e "  • Recommended config: ${RECOMMENDED_CONFIG}"
+    echo -e "  • This config has max_size set to 200GB"
+    echo -e "  • Using smaller mapsize will cause MDBX_MAP_FULL error"
+    echo
+    echo -e "${BOLD}System Requirements:${NC}"
+    echo -e "  • Available RAM: At least 200GB recommended"
+    echo -e "  • Available disk space: At least 200GB"
+    echo -e "  • 64-bit system required"
+    echo
+    log_warning "If you use a custom config file, ensure max_size >= 200GB!"
+    echo
 }
 
 build_benchmark() {
@@ -203,7 +286,8 @@ run_benchmark() {
     
     # Set default config files if not specified
     if [[ -z "${CONFIG_FILE}" ]]; then
-        CONFIG_FILE="configs/mdbx_env_performance.json"
+        CONFIG_FILE="${RECOMMENDED_CONFIG}"
+        log_info "Using recommended config for 2B KV pairs: ${CONFIG_FILE}"
     fi
     if [[ -z "${BENCH_CONFIG_FILE}" ]]; then
         BENCH_CONFIG_FILE="configs/bench_2billion.json"
@@ -224,6 +308,14 @@ run_benchmark() {
     fi
     if [[ ! -f "${BENCH_CONFIG_FILE}" ]]; then
         log_error "Bench config file not found: ${BENCH_CONFIG_FILE}"
+        exit 1
+    fi
+    
+    # Validate MDBX mapsize configuration
+    log_step "Validating MDBX mapsize configuration"
+    if ! validate_mapsize_config "${CONFIG_FILE}"; then
+        show_mapsize_warning
+        log_error "MDBX mapsize validation failed. Please fix the configuration."
         exit 1
     fi
     
@@ -311,6 +403,9 @@ print_banner() {
 
 main() {
     print_banner
+    
+    # Show critical mapsize requirements warning
+    show_mapsize_warning
     
     # Parse command line arguments
     parse_arguments "$@"

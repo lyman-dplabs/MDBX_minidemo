@@ -1,0 +1,16 @@
+{
+  "path": "/tmp/mdbx_bench_2billion",
+  "create": true,
+  "readonly": false,
+  "exclusive": false,
+  "in_memory": false,
+  "shared": false,
+  "read_ahead": false,
+  "write_map": true,
+  "page_size": 16384,
+  "max_size": 214748364800,
+  "growth_size": 21474836480,
+  "max_tables": 64,
+  "max_readers": 200,
+  "_comment": "This configuration is specifically designed for 2 billion KV pairs test. Each KV pair is 64 bytes (32-byte key + 32-byte value), requiring approximately 200GB of memory mapping space."
+}

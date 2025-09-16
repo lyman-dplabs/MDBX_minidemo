@@ -28,6 +28,9 @@ struct BenchConfig {
     // Test parameters
     size_t test_rounds = 2;             // Number of test rounds to run
     
+    // Batch processing parameters
+    size_t batch_size = 5000000;        // Batch size for database population (5M default)
+    
     // Database path
     std::string db_path = "/tmp/mdbx_bench";
 };
@@ -91,6 +94,7 @@ BenchConfig load_bench_config(const std::string& config_file) {
     config.total_kv_pairs = 1000000;
     config.test_kv_pairs = 100000;
     config.test_rounds = 2;
+    config.batch_size = 5000000;  // 5M default batch size
     config.db_path = "/tmp/mdbx_bench";
     
     // Load from environment variables first
@@ -118,6 +122,14 @@ BenchConfig load_bench_config(const std::string& config_file) {
         }
     }
     
+    if (const char* env_val = std::getenv("MDBX_BENCH_BATCH_SIZE")) {
+        try {
+            config.batch_size = std::stoull(env_val);
+        } catch (const std::exception& e) {
+            fmt::println("⚠ Invalid MDBX_BENCH_BATCH_SIZE: {}", env_val);
+        }
+    }
+    
     if (const char* env_val = std::getenv("MDBX_BENCH_DB_PATH")) {
         config.db_path = env_val;
     }
@@ -132,6 +144,7 @@ BenchConfig load_bench_config(const std::string& config_file) {
             if (root.isMember("total_kv_pairs")) config.total_kv_pairs = root["total_kv_pairs"].asUInt64();
             if (root.isMember("test_kv_pairs")) config.test_kv_pairs = root["test_kv_pairs"].asUInt64();
             if (root.isMember("test_rounds")) config.test_rounds = root["test_rounds"].asUInt64();
+            if (root.isMember("batch_size")) config.batch_size = root["batch_size"].asUInt64();
             if (root.isMember("db_path")) config.db_path = root["db_path"].asString();
             
             // Ignore key_size and value_size from config file since they are fixed
@@ -168,37 +181,70 @@ std::string generate_value(size_t index) {
     return value;
 }
 
-// Populate MDBX database with initial dataset
+// Populate MDBX database with initial dataset using batch commits
 void populate_database(::mdbx::env_managed& env, const BenchConfig& config) {
     fmt::println("\n=== Populating Database ===");
     fmt::println("Inserting {} KV pairs into database", config.total_kv_pairs);
+    fmt::println("Using batch size: {} KV pairs per transaction", config.batch_size);
     
     MapConfig table_config{"bench_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
     
     auto start_time = std::chrono::high_resolution_clock::now();
     
-    {
-        RWTxnManaged rw_txn(env);
-        auto cursor = rw_txn.rw_cursor(table_config);
+    size_t total_committed = 0;
+    size_t batch_count = 0;
+    auto total_commit_time = std::chrono::milliseconds(0);
+    
+    // Process data in batches to avoid memory explosion
+    for (size_t batch_start = 0; batch_start < config.total_kv_pairs; batch_start += config.batch_size) {
+        size_t batch_end = std::min(batch_start + config.batch_size, config.total_kv_pairs);
+        size_t batch_size_actual = batch_end - batch_start;
+        batch_count++;
         
-        for (size_t i = 0; i < config.total_kv_pairs; ++i) {
-            std::string key = generate_key(i);
-            std::string value = generate_value(i);
-            cursor->insert(str_to_slice(key), str_to_slice(value));
+        fmt::println("  Processing batch {}/{}: KV pairs {} to {} ({} pairs)", 
+                     batch_count, 
+                     (config.total_kv_pairs + config.batch_size - 1) / config.batch_size,
+                     batch_start, batch_end - 1, batch_size_actual);
+        
+        auto batch_start_time = std::chrono::high_resolution_clock::now();
+        
+        {
+            RWTxnManaged rw_txn(env);
+            auto cursor = rw_txn.rw_cursor(table_config);
             
-            // Progress indicator for large datasets
-            if ((i + 1) % 100000 == 0) {
-                fmt::println("  Inserted {}/{} KV pairs", i + 1, config.total_kv_pairs);
+            for (size_t i = batch_start; i < batch_end; ++i) {
+                std::string key = generate_key(i);
+                std::string value = generate_value(i);
+                cursor->insert(str_to_slice(key), str_to_slice(value));
             }
+            
+            auto commit_start = std::chrono::high_resolution_clock::now();
+            rw_txn.commit_and_stop();
+            auto commit_end = std::chrono::high_resolution_clock::now();
+            
+            auto commit_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                commit_end - commit_start);
+            total_commit_time += commit_duration;
+            
+            total_committed += batch_size_actual;
+            
+            auto batch_end_time = std::chrono::high_resolution_clock::now();
+            auto batch_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                batch_end_time - batch_start_time).count();
+            
+            fmt::println("    ✓ Batch {} completed: {} pairs in {} ms (commit: {} ms)", 
+                         batch_count, batch_size_actual, batch_duration, commit_duration.count());
         }
         
-        auto commit_start = std::chrono::high_resolution_clock::now();
-        rw_txn.commit_and_stop();
-        auto commit_end = std::chrono::high_resolution_clock::now();
-        
-        auto commit_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            commit_end - commit_start).count();
-        fmt::println("✓ Initial population commit time: {} ms", commit_duration);
+        // Progress indicator for large datasets
+        if (total_committed % (config.batch_size * 10) == 0 || total_committed == config.total_kv_pairs) {
+            auto elapsed = std::chrono::high_resolution_clock::now() - start_time;
+            auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+            double rate = total_committed / static_cast<double>(elapsed_seconds);
+            fmt::println("  Progress: {}/{} KV pairs ({:.1f}%) - Rate: {:.0f} pairs/sec", 
+                         total_committed, config.total_kv_pairs,
+                         100.0 * total_committed / config.total_kv_pairs, rate);
+        }
     }
     
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -209,6 +255,11 @@ void populate_database(::mdbx::env_managed& env, const BenchConfig& config) {
                  config.total_kv_pairs, total_duration);
     fmt::println("  Key size: {} bytes", BenchConfig::key_size);
     fmt::println("  Value size: {} bytes", BenchConfig::value_size);
+    fmt::println("  Batch size: {} KV pairs", config.batch_size);
+    fmt::println("  Total batches: {}", batch_count);
+    fmt::println("  Total commit time: {} ms", total_commit_time.count());
+    fmt::println("  Average commit time per batch: {:.1f} ms", 
+                 total_commit_time.count() / static_cast<double>(batch_count));
 }
 
 // Generate random indices for testing
@@ -867,6 +918,7 @@ void print_usage(const char* program_name) {
     fmt::println("  MDBX_BENCH_TOTAL_KV_PAIRS  Total KV pairs in database");
     fmt::println("  MDBX_BENCH_TEST_KV_PAIRS   KV pairs to test per round");
     fmt::println("  MDBX_BENCH_TEST_ROUNDS     Number of test rounds");
+    fmt::println("  MDBX_BENCH_BATCH_SIZE      Batch size for database population");
     fmt::println("  MDBX_BENCH_DB_PATH         Database path");
     fmt::println("  Note: Key and value sizes are fixed at 32 bytes");
     fmt::println("");
@@ -884,6 +936,7 @@ void print_usage(const char* program_name) {
     fmt::println("  \"total_kv_pairs\": 2000000,");
     fmt::println("  \"test_kv_pairs\": 200000,");
     fmt::println("  \"test_rounds\": 5,");
+    fmt::println("  \"batch_size\": 1000000,");
     fmt::println("  \"db_path\": \"/tmp/mdbx_bench_custom\"");
     fmt::println("  \"Note\": \"key_size and value_size are fixed at 32 bytes\"");
     fmt::println("}}");
