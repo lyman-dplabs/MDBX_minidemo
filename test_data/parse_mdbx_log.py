@@ -192,7 +192,7 @@ def parse_mixed_tests(log_content: str) -> List[Dict]:
     return mixed_tests
 
 def main():
-    log_file = 'mdbx_bench_2billion_20250916_231124.log.bak'
+    log_file = 'mdbx_01B.logs'
     output_file = 'mdbx_benchmark_results.csv'
     
     # Read log file

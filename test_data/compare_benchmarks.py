@@ -118,16 +118,12 @@ def generate_summary_stats(mdbx_df: pd.DataFrame, rocksdb_df: pd.DataFrame) -> D
             'test_types': list(mdbx_df['test_type'].unique()),
             'overall_avg_latency_us': mdbx_df['avg_latency_us'].mean(),
             'overall_avg_throughput_ops_sec': mdbx_df['throughput_ops_sec'].mean(),
-            'data_prep_time': "966 seconds (from log)",
-            'total_kv_pairs': "2,000,000,000"
         },
         'rocksdb': {
             'total_rounds': len(rocksdb_df),
             'test_types': list(rocksdb_df['test_type'].unique()),
             'overall_avg_latency_us': rocksdb_df['avg_latency_us'].mean(),
             'overall_avg_throughput_ops_sec': rocksdb_df['throughput_ops_sec'].mean(),
-            'data_prep_time': "1858 seconds (from log)",
-            'total_kv_pairs': "2,000,000,000"
         }
     }
     return summary
@@ -208,60 +204,8 @@ This report compares the performance of MDBX and RocksDB databases using identic
                 report += f"| Commit Time | {mdbx_data['avg_commit_time_ms']:.2f} ms | {rocksdb_data['avg_commit_time_ms']:.2f} ms | - |\n"
 
             report += "\n"
-            
-            # Add interpretation
-            if test_type == 'read':
-                report += f"""**Analysis**: RocksDB demonstrates significantly better read performance with {abs(comp_data['latency_improvement']['percent_improvement']):.1f}% lower latency. This suggests RocksDB's LSM-tree structure and caching mechanisms are highly optimized for read workloads.
 
-"""
-            elif test_type == 'write':
-                report += f"""**Analysis**: RocksDB shows exceptional write performance with nearly instantaneous write operations. The LSM-tree's append-only writes and write batching provide substantial advantages over MDBX's B-tree structure for write-heavy workloads.
-
-"""
-            elif test_type == 'update':
-                report += f"""**Analysis**: Update operations involve both reads and writes. RocksDB's performance advantage in both individual operations translates to better overall update performance, though the gap is smaller due to the mixed nature of the workload.
-
-"""
-            elif test_type == 'mixed':
-                report += f"""**Analysis**: Mixed workloads (80% reads, 20% writes) show RocksDB's balanced performance across both operation types. The significant performance advantage demonstrates RocksDB's optimization for real-world application patterns.
-
-"""
-
-    report += """## Performance Summary by Database
-
-### MDBX Characteristics
-- **Architecture**: B-tree based storage engine
-- **Strengths**: ACID compliance, consistent performance, simple architecture
-- **Read Performance**: Moderate latency with consistent response times
-- **Write Performance**: Higher latency due to B-tree maintenance overhead
-- **Use Cases**: Applications requiring strong consistency and predictable performance
-
-### RocksDB Characteristics  
-- **Architecture**: LSM-tree based storage engine (LevelDB fork)
-- **Strengths**: Exceptional write performance, optimized read paths, extensive tuning options
-- **Read Performance**: Excellent latency with efficient caching and bloom filters
-- **Write Performance**: Outstanding throughput with write batching and append-only operations
-- **Use Cases**: High-throughput applications, write-heavy workloads, analytics systems
-
-## Recommendations
-
-### Choose MDBX when:
-- Strong ACID guarantees are required
-- Predictable, consistent performance is more important than peak performance
-- Simple deployment and maintenance are priorities
-- Application has moderate performance requirements
-
-### Choose RocksDB when:
-- Maximum performance is the primary concern
-- Write-heavy or mixed workloads are common
-- Application can benefit from extensive tuning options
-- High throughput requirements justify the complexity
-
-## Conclusion
-
-RocksDB demonstrates superior performance across all test categories, with particularly strong advantages in write operations and mixed workloads. The LSM-tree architecture proves highly effective for high-throughput scenarios. However, MDBX provides consistent, predictable performance that may be more suitable for applications where consistency is prioritized over peak performance.
-
-The choice between these databases should consider not only raw performance metrics but also factors such as operational complexity, consistency requirements, and specific application access patterns.
+    report += """
 
 ---
 *Report generated from benchmark data collected on 2025-09-16*

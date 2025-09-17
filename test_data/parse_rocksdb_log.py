@@ -188,7 +188,7 @@ def parse_mixed_tests(log_content: str) -> List[Dict]:
     return mixed_tests
 
 def main():
-    log_file = 'rocksdb_bench_2billion_20250916_221346.log.bak'
+    log_file = 'rocksdb_01B.logs'
     output_file = 'rocksdb_benchmark_results.csv'
     
     # Read log file
