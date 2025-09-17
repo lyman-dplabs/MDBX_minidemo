@@ -1,0 +1,284 @@
+{
+  "mdbx_metrics": {
+    "read": {
+      "rounds": 100,
+      "avg_total_time_ms": 25696.66,
+      "std_total_time_ms": 3755.9655074738553,
+      "avg_commit_time_ms": null,
+      "avg_latency_us": 256.0546,
+      "std_latency_us": 37.5112470788981,
+      "avg_tp99_latency_us": 557.69,
+      "avg_throughput_ops_sec": 3962.0939000000003,
+      "min_latency_us": 219.31,
+      "max_latency_us": 401.97,
+      "min_throughput_ops_sec": 2481.39,
+      "max_throughput_ops_sec": 4541.53,
+      "avg_read_latency_us": 256.0546,
+      "avg_read_time_ms": 25696.66
+    },
+    "write": {
+      "rounds": 100,
+      "avg_total_time_ms": 36238.96,
+      "std_total_time_ms": 3461.0316874911996,
+      "avg_commit_time_ms": 962.08,
+      "avg_latency_us": 361.227,
+      "std_latency_us": 34.55843446872692,
+      "avg_tp99_latency_us": 904.95,
+      "avg_throughput_ops_sec": 2783.4757,
+      "min_latency_us": 304.95,
+      "max_latency_us": 463.83,
+      "min_throughput_ops_sec": 2149.61,
+      "max_throughput_ops_sec": 3267.33,
+      "avg_write_latency_us": 361.227,
+      "avg_write_time_ms": 36238.96
+    },
+    "update": {
+      "rounds": 100,
+      "avg_total_time_ms": 31936.81,
+      "std_total_time_ms": 1408.6447365600682,
+      "avg_commit_time_ms": 1800.25,
+      "avg_latency_us": 158.72449999999998,
+      "std_latency_us": 7.042339971396387,
+      "avg_tp99_latency_us": 502.57,
+      "avg_throughput_ops_sec": 6274.348900000001,
+      "min_latency_us": 145.35,
+      "max_latency_us": 180.14,
+      "min_throughput_ops_sec": 5521.81,
+      "max_throughput_ops_sec": 6835.04,
+      "avg_read_latency_us": 255.9741,
+      "avg_write_latency_us": 61.474,
+      "avg_mixed_latency_us": 158.72449999999998,
+      "avg_read_time_ms": 25710.29,
+      "avg_write_time_ms": 6226.52,
+      "avg_mixed_throughput_ops_sec": 6274.348900000001
+    },
+    "mixed": {
+      "rounds": 100,
+      "avg_total_time_ms": 26637.77,
+      "std_total_time_ms": 1147.0440786137333,
+      "avg_commit_time_ms": 348.66,
+      "avg_latency_us": 261.95599999999996,
+      "std_latency_us": 11.568156746217202,
+      "avg_tp99_latency_us": 596.01,
+      "avg_throughput_ops_sec": 3760.6197,
+      "min_latency_us": 243.69,
+      "max_latency_us": 294.72,
+      "min_throughput_ops_sec": 3336.0,
+      "max_throughput_ops_sec": 4086.64,
+      "avg_read_latency_us": 242.27070000000003,
+      "avg_write_latency_us": 340.6961,
+      "avg_mixed_latency_us": 261.95599999999996,
+      "avg_mixed_throughput_ops_sec": 3760.6197,
+      "avg_read_ops": 80000.0,
+      "avg_write_ops": 20000.0
+    }
+  },
+  "rocksdb_metrics": {
+    "read": {
+      "rounds": 100,
+      "avg_total_time_ms": 4836.03,
+      "std_total_time_ms": 1317.7042590211295,
+      "avg_commit_time_ms": null,
+      "avg_latency_us": 47.55959999999999,
+      "std_latency_us": 13.164147815835697,
+      "avg_tp99_latency_us": 163.96,
+      "avg_throughput_ops_sec": 21965.1297,
+      "min_latency_us": 31.46,
+      "max_latency_us": 117.11,
+      "min_throughput_ops_sec": 8476.01,
+      "max_throughput_ops_sec": 31007.75,
+      "avg_read_latency_us": 47.55959999999999,
+      "avg_read_time_ms": 4836.03
+    },
+    "write": {
+      "rounds": 100,
+      "avg_total_time_ms": 38.9,
+      "std_total_time_ms": 0.9587449708822046,
+      "avg_commit_time_ms": 335.15,
+      "avg_latency_us": 0.0128,
+      "std_latency_us": 0.007664690127296389,
+      "avg_tp99_latency_us": 0.0,
+      "avg_throughput_ops_sec": 2572183.2441,
+      "min_latency_us": 0.01,
+      "max_latency_us": 0.06,
+      "min_throughput_ops_sec": 2325581.4,
+      "max_throughput_ops_sec": 2631578.95,
+      "avg_write_latency_us": 0.0128,
+      "avg_write_time_ms": 38.9
+    },
+    "update": {
+      "rounds": 100,
+      "avg_total_time_ms": 4247.86,
+      "std_total_time_ms": 1209.5988066839818,
+      "avg_commit_time_ms": 336.61,
+      "avg_latency_us": 20.6468,
+      "std_latency_us": 6.015387655543461,
+      "avg_tp99_latency_us": 149.47,
+      "avg_throughput_ops_sec": 50346.066000000006,
+      "min_latency_us": 13.32,
+      "max_latency_us": 44.57,
+      "min_throughput_ops_sec": 22136.14,
+      "max_throughput_ops_sec": 72072.07,
+      "avg_read_latency_us": 41.274699999999996,
+      "avg_write_latency_us": 0.018000000000000002,
+      "avg_mixed_latency_us": 20.6468,
+      "avg_read_time_ms": 4219.63,
+      "avg_write_time_ms": 28.23,
+      "avg_mixed_throughput_ops_sec": 50346.066000000006
+    },
+    "mixed": {
+      "rounds": 100,
+      "avg_total_time_ms": 2820.16,
+      "std_total_time_ms": 33.97078959127305,
+      "avg_commit_time_ms": 71.05,
+      "avg_latency_us": 26.797399999999996,
+      "std_latency_us": 0.33937143323646096,
+      "avg_tp99_latency_us": 113.43,
+      "avg_throughput_ops_sec": 35464.0223,
+      "min_latency_us": 26.05,
+      "max_latency_us": 28.31,
+      "min_throughput_ops_sec": 33704.08,
+      "max_throughput_ops_sec": 36469.73,
+      "avg_read_latency_us": 33.4925,
+      "avg_write_latency_us": 0.0148,
+      "avg_mixed_latency_us": 26.797399999999996,
+      "avg_mixed_throughput_ops_sec": 35464.0223,
+      "avg_read_ops": 80000.0,
+      "avg_write_ops": 20000.0
+    }
+  },
+  "comparison": {
+    "read": {
+      "latency_improvement": {
+        "mdbx_avg_us": 256.0546,
+        "rocksdb_avg_us": 47.55959999999999,
+        "improvement_factor": 5.383867820587223,
+        "percent_improvement": 81.42599273748647
+      },
+      "throughput_improvement": {
+        "mdbx_avg_ops_sec": 3962.0939000000003,
+        "rocksdb_avg_ops_sec": 21965.1297,
+        "improvement_factor": 5.54381856018102,
+        "percent_improvement": 454.381856018102
+      },
+      "time_improvement": {
+        "mdbx_avg_ms": 25696.66,
+        "rocksdb_avg_ms": 4836.03,
+        "improvement_factor": 5.313585730444187,
+        "percent_improvement": 81.18031681938432
+      },
+      "tp99_latency_improvement": {
+        "mdbx_avg_us": 557.69,
+        "rocksdb_avg_us": 163.96,
+        "improvement_factor": 3.4013783849719443,
+        "percent_improvement": 70.60015420753464
+      }
+    },
+    "write": {
+      "latency_improvement": {
+        "mdbx_avg_us": 361.227,
+        "rocksdb_avg_us": 0.0128,
+        "improvement_factor": 28220.859374999996,
+        "percent_improvement": 99.9964565217993
+      },
+      "throughput_improvement": {
+        "mdbx_avg_ops_sec": 2783.4757,
+        "rocksdb_avg_ops_sec": 2572183.2441,
+        "improvement_factor": 924.0904255424252,
+        "percent_improvement": 92309.04255424252
+      },
+      "time_improvement": {
+        "mdbx_avg_ms": 36238.96,
+        "rocksdb_avg_ms": 38.9,
+        "improvement_factor": 931.5928020565552,
+        "percent_improvement": 99.89265696366562
+      },
+      "tp99_latency_improvement": {
+        "mdbx_avg_us": 904.95,
+        "rocksdb_avg_us": 0.0,
+        "improvement_factor": Infinity,
+        "percent_improvement": 100.0
+      }
+    },
+    "update": {
+      "latency_improvement": {
+        "mdbx_avg_us": 158.72449999999998,
+        "rocksdb_avg_us": 20.6468,
+        "improvement_factor": 7.687607764883662,
+        "percent_improvement": 86.99205226666331
+      },
+      "throughput_improvement": {
+        "mdbx_avg_ops_sec": 6274.348900000001,
+        "rocksdb_avg_ops_sec": 50346.066000000006,
+        "improvement_factor": 8.02411003952936,
+        "percent_improvement": 702.4110039529362
+      },
+      "time_improvement": {
+        "mdbx_avg_ms": 31936.81,
+        "rocksdb_avg_ms": 4247.86,
+        "improvement_factor": 7.518329229306051,
+        "percent_improvement": 86.69917252224
+      },
+      "tp99_latency_improvement": {
+        "mdbx_avg_us": 502.57,
+        "rocksdb_avg_us": 149.47,
+        "improvement_factor": 3.3623469592560378,
+        "percent_improvement": 70.2588694112263
+      }
+    },
+    "mixed": {
+      "latency_improvement": {
+        "mdbx_avg_us": 261.95599999999996,
+        "rocksdb_avg_us": 26.797399999999996,
+        "improvement_factor": 9.775425974161672,
+        "percent_improvement": 89.77026676235704
+      },
+      "throughput_improvement": {
+        "mdbx_avg_ops_sec": 3760.6197,
+        "rocksdb_avg_ops_sec": 35464.0223,
+        "improvement_factor": 9.430366569637444,
+        "percent_improvement": 843.0366569637445
+      },
+      "time_improvement": {
+        "mdbx_avg_ms": 26637.77,
+        "rocksdb_avg_ms": 2820.16,
+        "improvement_factor": 9.445481816634517,
+        "percent_improvement": 89.41292758365283
+      },
+      "tp99_latency_improvement": {
+        "mdbx_avg_us": 596.01,
+        "rocksdb_avg_us": 113.43,
+        "improvement_factor": 5.25443004496165,
+        "percent_improvement": 80.9684401268435
+      }
+    }
+  },
+  "summary": {
+    "mdbx": {
+      "total_rounds": 400,
+      "test_types": [
+        "read",
+        "write",
+        "update",
+        "mixed"
+      ],
+      "overall_avg_latency_us": 259.490525,
+      "overall_avg_throughput_ops_sec": 4195.13455,
+      "data_prep_time": "966 seconds (from log)",
+      "total_kv_pairs": "2,000,000,000"
+    },
+    "rocksdb": {
+      "total_rounds": 400,
+      "test_types": [
+        "read",
+        "write",
+        "update",
+        "mixed"
+      ],
+      "overall_avg_latency_us": 23.75415,
+      "overall_avg_throughput_ops_sec": 669989.615525,
+      "data_prep_time": "1858 seconds (from log)",
+      "total_kv_pairs": "2,000,000,000"
+    }
+  }
+}
