@@ -4,6 +4,9 @@
 
 本报告对比了 MDBX 和 RocksDB 数据库在 20 亿键值对相同基准测试负载下的性能表现。两个数据库都使用 32 字节键和 32 字节值进行测试，涵盖四个测试类别：只读、只写、更新（先读后写）和混合读写操作。
 
+MDBX详细性能数据可参考本目录下的mdbx_benchmark_2b_result.csv.
+Rockssb详细性能数据可参考本目录下的rocksdb_benchmark_2b_result.csv
+
 ### 主要发现
 
 - **读取测试**: RocksDB 平均延迟优于 MDBX 81.4%
