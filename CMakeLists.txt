@@ -157,6 +157,7 @@ target_link_libraries(benchmark_runner PRIVATE
 # This is the MDBX performance benchmark tool
 add_executable(mdbx_bench
     src/mdbx_bench.cpp
+    src/mdbx_bench_util.cpp
     src/utils/string_utils.cpp
 )
 target_link_libraries(mdbx_bench PRIVATE
