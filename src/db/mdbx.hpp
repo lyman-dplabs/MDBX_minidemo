@@ -449,6 +449,7 @@ struct EnvConfig {
     bool readonly{false};               // Whether db should be opened in RO mode
     bool exclusive{false};              // Whether this process has exclusive access
     bool in_memory{false};              // Whether this db is in memory
+    bool no_meta_sync{false};           // Whether to disable metadata sync (MDBX_NOMETASYNC)
     bool shared{false};                 // Whether this process opens a db already opened by another process
     bool read_ahead{false};             // Whether to enable mdbx read ahead
     bool write_map{false};              // Whether to enable mdbx write map
@@ -457,6 +458,16 @@ struct EnvConfig {
     size_t growth_size{2_Gibi};         // Increment size for each extension
     uint32_t max_tables{256};           // Default max number of named tables
     uint32_t max_readers{100};          // Default max number of readers
+    
+    // Advanced tuning parameters
+    size_t rp_augment_limit{32_Mebi};           // Read-only page augment limit
+    size_t txn_dp_initial{16_Kibi};             // Transaction dirty pages initial
+    size_t dp_reserve_limit{16_Kibi};           // Dirty pages reserve limit
+    size_t txn_dp_limit_multiplier{2};          // Transaction dirty pages limit multiplier
+    size_t merge_threshold{32_Kibi};            // Merge threshold (12.5%-50% range)
+    bool enable_coalesce{true};                 // Enable page coalescing
+    bool enable_sync_durable{true};             // Enable sync durable
+    bool enable_notls{true};                    // Disable thread-local storage
 };
 
 //! \brief EnvUnmanaged wraps an *unmanaged* MDBX environment, which means the underlying environment

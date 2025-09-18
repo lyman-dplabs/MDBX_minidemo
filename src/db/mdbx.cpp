@@ -90,7 +90,11 @@ static mdbx::cursor::move_operation move_operation(CursorMoveDirection direction
         throw std::runtime_error("Database map size is too small. Min required " + std::to_string(db_file_size));
     }
 
-    uint32_t flags{MDBX_NOTLS | MDBX_NORDAHEAD | MDBX_COALESCE | MDBX_SYNC_DURABLE};  // Default flags
+    uint32_t flags{0};  // Initialize flags
+    if (config.enable_notls) flags |= MDBX_NOTLS;
+    if (!config.read_ahead) flags |= MDBX_NORDAHEAD;
+    if (config.enable_coalesce) flags |= MDBX_COALESCE;
+    if (config.enable_sync_durable) flags |= MDBX_SYNC_DURABLE;
 
     if (config.read_ahead) {
         flags &= ~MDBX_NORDAHEAD;
@@ -108,7 +112,7 @@ static mdbx::cursor::move_operation move_operation(CursorMoveDirection direction
     if (config.readonly) {
         flags |= MDBX_RDONLY;
     }
-    if (config.in_memory) {
+    if (config.in_memory || config.no_meta_sync) {
         flags |= MDBX_NOMETASYNC;
     }
     if (config.exclusive) {
@@ -150,19 +154,19 @@ static mdbx::cursor::move_operation move_operation(CursorMoveDirection direction
 
     if (!config.shared) {
         // C++ bindings don't have set_option
-        ::mdbx::error::success_or_throw(::mdbx_env_set_option(env, MDBX_opt_rp_augment_limit, 32_Mebi));
+        ::mdbx::error::success_or_throw(::mdbx_env_set_option(env, MDBX_opt_rp_augment_limit, config.rp_augment_limit));
         if (!config.readonly) {
-            ::mdbx::error::success_or_throw(::mdbx_env_set_option(env, MDBX_opt_txn_dp_initial, 16_Kibi));
-            ::mdbx::error::success_or_throw(::mdbx_env_set_option(env, MDBX_opt_dp_reserve_limit, 16_Kibi));
+            ::mdbx::error::success_or_throw(::mdbx_env_set_option(env, MDBX_opt_txn_dp_initial, config.txn_dp_initial));
+            ::mdbx::error::success_or_throw(::mdbx_env_set_option(env, MDBX_opt_dp_reserve_limit, config.dp_reserve_limit));
 
             uint64_t dirty_pages_limit{0};
             ::mdbx::error::success_or_throw(::mdbx_env_get_option(env, MDBX_opt_txn_dp_limit, &dirty_pages_limit));
-            ::mdbx::error::success_or_throw(::mdbx_env_set_option(env, MDBX_opt_txn_dp_limit, dirty_pages_limit * 2));
+            ::mdbx::error::success_or_throw(::mdbx_env_set_option(env, MDBX_opt_txn_dp_limit, dirty_pages_limit * config.txn_dp_limit_multiplier));
 
             // must be in the range from 12.5% (almost empty) to 50% (half empty)
             // which corresponds to the range from 8192 and to 32768 in units respectively
             ::mdbx::error::success_or_throw(
-                ::mdbx_env_set_option(env, MDBX_opt_merge_threshold_16dot16_percent, 32_Kibi));
+                ::mdbx_env_set_option(env, MDBX_opt_merge_threshold_16dot16_percent, config.merge_threshold));
         }
     }
     if (!config.in_memory) {
