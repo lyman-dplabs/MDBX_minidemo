@@ -13,6 +13,7 @@
 #include <json/json.h>
 #include <cstdlib>
 #include <algorithm>
+#include <functional>
 
 using namespace datastore::kvdb;
 using namespace utils;
@@ -35,11 +36,29 @@ struct BenchConfig {
     std::string db_path = "/data/mdbx_bench";
 };
 
-// EnvConfig loader with JSON support
-EnvConfig load_env_config(const std::string& config_file) {
+// Generic JSON config loader
+bool load_json_config_generic(const std::string& config_file, const std::function<void(const Json::Value&)>& loader) {
+    if (!config_file.empty() && std::filesystem::exists(config_file)) {
+        try {
+            std::ifstream file(config_file);
+            Json::Value root;
+            file >> root;
+            loader(root);
+            fmt::println("✓ Loaded config from: {}", config_file);
+            return true;
+        } catch (const std::exception& e) {
+            fmt::println("⚠ Failed to load config file {}, using defaults: {}", config_file, e.what());
+            return false;
+        }
+    } else if (!config_file.empty()) {
+        fmt::println("✓ Using default config (file not found: {})", config_file);
+    }
+    return false;
+}
+
+// EnvConfig defaults initializer
+EnvConfig create_default_env_config() {
     EnvConfig config;
-    
-    // Set defaults
     config.path = "/data/mdbx_bench";
     config.create = true;
     config.readonly = false;
@@ -58,128 +77,106 @@ EnvConfig load_env_config(const std::string& config_file) {
     config.read_ahead = false;
     config.write_map = false;
     config.page_size = 4_Kibi;
-    config.max_size = 8_Gibi;  // Larger for bench data
+    config.max_size = 8_Gibi;
     config.growth_size = 1_Gibi;
     config.max_tables = 64;
     config.max_readers = 50;
-    
-    // Try to load from file if it exists
-    if (!config_file.empty() && std::filesystem::exists(config_file)) {
-        try {
-            std::ifstream file(config_file);
-            Json::Value root;
-            file >> root;
-            
-            if (root.isMember("path")) config.path = root["path"].asString();
-            if (root.isMember("create")) config.create = root["create"].asBool();
-            if (root.isMember("readonly")) config.readonly = root["readonly"].asBool();
-            if (root.isMember("exclusive")) config.exclusive = root["exclusive"].asBool();
-            if (root.isMember("in_memory")) config.in_memory = root["in_memory"].asBool();
-            if (root.isMember("no_meta_sync")) config.no_meta_sync = root["no_meta_sync"].asBool();
-            if (root.isMember("rp_augment_limit")) config.rp_augment_limit = root["rp_augment_limit"].asUInt64();
-            if (root.isMember("txn_dp_initial")) config.txn_dp_initial = root["txn_dp_initial"].asUInt64();
-            if (root.isMember("dp_reserve_limit")) config.dp_reserve_limit = root["dp_reserve_limit"].asUInt64();
-            if (root.isMember("txn_dp_limit_multiplier")) config.txn_dp_limit_multiplier = root["txn_dp_limit_multiplier"].asUInt();
-            if (root.isMember("merge_threshold")) config.merge_threshold = root["merge_threshold"].asUInt64();
-            if (root.isMember("enable_coalesce")) config.enable_coalesce = root["enable_coalesce"].asBool();
-            if (root.isMember("enable_sync_durable")) config.enable_sync_durable = root["enable_sync_durable"].asBool();
-            if (root.isMember("enable_notls")) config.enable_notls = root["enable_notls"].asBool();
-            if (root.isMember("shared")) config.shared = root["shared"].asBool();
-            if (root.isMember("read_ahead")) config.read_ahead = root["read_ahead"].asBool();
-            if (root.isMember("write_map")) config.write_map = root["write_map"].asBool();
-            if (root.isMember("page_size")) config.page_size = root["page_size"].asUInt64();
-            if (root.isMember("max_size")) config.max_size = root["max_size"].asUInt64();
-            if (root.isMember("growth_size")) config.growth_size = root["growth_size"].asUInt64();
-            if (root.isMember("max_tables")) config.max_tables = root["max_tables"].asUInt();
-            if (root.isMember("max_readers")) config.max_readers = root["max_readers"].asUInt();
-            
-            fmt::println("✓ Loaded EnvConfig from: {}", config_file);
-        } catch (const std::exception& e) {
-            fmt::println("⚠ Failed to load config file {}, using defaults: {}", config_file, e.what());
-        }
-    } else {
-        fmt::println("✓ Using default EnvConfig (file not found: {})", config_file);
-    }
-    
     return config;
+}
+
+// EnvConfig JSON loader
+void load_env_config_from_json(const Json::Value& root, EnvConfig& config) {
+    if (root.isMember("path")) config.path = root["path"].asString();
+    if (root.isMember("create")) config.create = root["create"].asBool();
+    if (root.isMember("readonly")) config.readonly = root["readonly"].asBool();
+    if (root.isMember("exclusive")) config.exclusive = root["exclusive"].asBool();
+    if (root.isMember("in_memory")) config.in_memory = root["in_memory"].asBool();
+    if (root.isMember("no_meta_sync")) config.no_meta_sync = root["no_meta_sync"].asBool();
+    if (root.isMember("rp_augment_limit")) config.rp_augment_limit = root["rp_augment_limit"].asUInt64();
+    if (root.isMember("txn_dp_initial")) config.txn_dp_initial = root["txn_dp_initial"].asUInt64();
+    if (root.isMember("dp_reserve_limit")) config.dp_reserve_limit = root["dp_reserve_limit"].asUInt64();
+    if (root.isMember("txn_dp_limit_multiplier")) config.txn_dp_limit_multiplier = root["txn_dp_limit_multiplier"].asUInt();
+    if (root.isMember("merge_threshold")) config.merge_threshold = root["merge_threshold"].asUInt64();
+    if (root.isMember("enable_coalesce")) config.enable_coalesce = root["enable_coalesce"].asBool();
+    if (root.isMember("enable_sync_durable")) config.enable_sync_durable = root["enable_sync_durable"].asBool();
+    if (root.isMember("enable_notls")) config.enable_notls = root["enable_notls"].asBool();
+    if (root.isMember("shared")) config.shared = root["shared"].asBool();
+    if (root.isMember("read_ahead")) config.read_ahead = root["read_ahead"].asBool();
+    if (root.isMember("write_map")) config.write_map = root["write_map"].asBool();
+    if (root.isMember("page_size")) config.page_size = root["page_size"].asUInt64();
+    if (root.isMember("max_size")) config.max_size = root["max_size"].asUInt64();
+    if (root.isMember("growth_size")) config.growth_size = root["growth_size"].asUInt64();
+    if (root.isMember("max_tables")) config.max_tables = root["max_tables"].asUInt();
+    if (root.isMember("max_readers")) config.max_readers = root["max_readers"].asUInt();
+}
+
+// EnvConfig loader with JSON support
+EnvConfig load_env_config(const std::string& config_file) {
+    EnvConfig config = create_default_env_config();
+    load_json_config_generic(config_file, [&config](const Json::Value& root) {
+        load_env_config_from_json(root, config);
+    });
+    return config;
+}
+
+// Environment variable loader for size_t
+void load_env_var_size_t(const char* env_name, size_t& value) {
+    if (const char* env_val = std::getenv(env_name)) {
+        try {
+            value = std::stoull(env_val);
+        } catch (const std::exception& e) {
+            fmt::println("⚠ Invalid {}: {}", env_name, env_val);
+        }
+    }
+}
+
+// Environment variable loader for string
+void load_env_var_string(const char* env_name, std::string& value) {
+    if (const char* env_val = std::getenv(env_name)) {
+        value = env_val;
+    }
+}
+
+// BenchConfig defaults initializer
+BenchConfig create_default_bench_config() {
+    BenchConfig config;
+    config.total_kv_pairs = 1000000;
+    config.test_kv_pairs = 100000;
+    config.test_rounds = 2;
+    config.batch_size = 5000000;
+    config.db_path = "/data/mdbx_bench";
+    return config;
+}
+
+// BenchConfig environment loader
+void load_bench_config_from_env(BenchConfig& config) {
+    load_env_var_size_t("MDBX_BENCH_TOTAL_KV_PAIRS", config.total_kv_pairs);
+    load_env_var_size_t("MDBX_BENCH_TEST_KV_PAIRS", config.test_kv_pairs);
+    load_env_var_size_t("MDBX_BENCH_TEST_ROUNDS", config.test_rounds);
+    load_env_var_size_t("MDBX_BENCH_BATCH_SIZE", config.batch_size);
+    load_env_var_string("MDBX_BENCH_DB_PATH", config.db_path);
+}
+
+// BenchConfig JSON loader
+void load_bench_config_from_json(const Json::Value& root, BenchConfig& config) {
+    if (root.isMember("total_kv_pairs")) config.total_kv_pairs = root["total_kv_pairs"].asUInt64();
+    if (root.isMember("test_kv_pairs")) config.test_kv_pairs = root["test_kv_pairs"].asUInt64();
+    if (root.isMember("test_rounds")) config.test_rounds = root["test_rounds"].asUInt64();
+    if (root.isMember("batch_size")) config.batch_size = root["batch_size"].asUInt64();
+    if (root.isMember("db_path")) config.db_path = root["db_path"].asString();
+    
+    if (root.isMember("key_size") || root.isMember("value_size")) {
+        fmt::println("⚠ key_size and value_size are fixed at 32 bytes, ignoring config file values");
+    }
 }
 
 // BenchConfig loader with JSON and environment variable support
 BenchConfig load_bench_config(const std::string& config_file) {
-    BenchConfig config;
-    
-    // Set defaults
-    config.total_kv_pairs = 1000000;
-    config.test_kv_pairs = 100000;
-    config.test_rounds = 2;
-    config.batch_size = 5000000;  // 5M default batch size
-    config.db_path = "/data/mdbx_bench";
-    
-    // Load from environment variables first
-    if (const char* env_val = std::getenv("MDBX_BENCH_TOTAL_KV_PAIRS")) {
-        try {
-            config.total_kv_pairs = std::stoull(env_val);
-        } catch (const std::exception& e) {
-            fmt::println("⚠ Invalid MDBX_BENCH_TOTAL_KV_PAIRS: {}", env_val);
-        }
-    }
-    
-    if (const char* env_val = std::getenv("MDBX_BENCH_TEST_KV_PAIRS")) {
-        try {
-            config.test_kv_pairs = std::stoull(env_val);
-        } catch (const std::exception& e) {
-            fmt::println("⚠ Invalid MDBX_BENCH_TEST_KV_PAIRS: {}", env_val);
-        }
-    }
-    
-    if (const char* env_val = std::getenv("MDBX_BENCH_TEST_ROUNDS")) {
-        try {
-            config.test_rounds = std::stoull(env_val);
-        } catch (const std::exception& e) {
-            fmt::println("⚠ Invalid MDBX_BENCH_TEST_ROUNDS: {}", env_val);
-        }
-    }
-    
-    if (const char* env_val = std::getenv("MDBX_BENCH_BATCH_SIZE")) {
-        try {
-            config.batch_size = std::stoull(env_val);
-        } catch (const std::exception& e) {
-            fmt::println("⚠ Invalid MDBX_BENCH_BATCH_SIZE: {}", env_val);
-        }
-    }
-    
-    if (const char* env_val = std::getenv("MDBX_BENCH_DB_PATH")) {
-        config.db_path = env_val;
-    }
-    
-    // Try to load from file if it exists (overrides environment variables)
-    if (!config_file.empty() && std::filesystem::exists(config_file)) {
-        try {
-            std::ifstream file(config_file);
-            Json::Value root;
-            file >> root;
-            
-            if (root.isMember("total_kv_pairs")) config.total_kv_pairs = root["total_kv_pairs"].asUInt64();
-            if (root.isMember("test_kv_pairs")) config.test_kv_pairs = root["test_kv_pairs"].asUInt64();
-            if (root.isMember("test_rounds")) config.test_rounds = root["test_rounds"].asUInt64();
-            if (root.isMember("batch_size")) config.batch_size = root["batch_size"].asUInt64();
-            if (root.isMember("db_path")) config.db_path = root["db_path"].asString();
-            
-            // Ignore key_size and value_size from config file since they are fixed
-            if (root.isMember("key_size") || root.isMember("value_size")) {
-                fmt::println("⚠ key_size and value_size are fixed at 32 bytes, ignoring config file values");
-            }
-            
-            fmt::println("✓ Loaded BenchConfig from: {}", config_file);
-        } catch (const std::exception& e) {
-            fmt::println("⚠ Failed to load BenchConfig file {}, using environment/defaults: {}", config_file, e.what());
-        }
-    } else if (!config_file.empty()) {
-        fmt::println("⚠ BenchConfig file not found: {}, using environment/defaults", config_file);
-    } else {
-        fmt::println("✓ Using default BenchConfig (no file specified)");
-    }
-    
+    BenchConfig config = create_default_bench_config();
+    load_bench_config_from_env(config);
+    load_json_config_generic(config_file, [&config](const Json::Value& root) {
+        load_bench_config_from_json(root, config);
+    });
     return config;
 }
 
@@ -324,308 +321,264 @@ struct RoundResult {
     double tp99_mixed_latency_us = 0.0;
 };
 
-// Calculate statistics from latency vectors
-void calculate_latency_stats(RoundResult& result) {
-    auto calc_stats = [](const std::vector<double>& latencies, double& avg, double& tp99) {
-        if (latencies.empty()) {
-            avg = tp99 = 0.0;
-            return;
-        }
-        
-        // Calculate average
-        double sum = 0.0;
-        for (double lat : latencies) {
-            sum += lat;
-        }
-        avg = sum / latencies.size();
-        
-        // Calculate Tp99
-        std::vector<double> sorted_latencies = latencies;
-        std::sort(sorted_latencies.begin(), sorted_latencies.end());
-        size_t tp99_index = static_cast<size_t>(sorted_latencies.size() * 0.99);
-        if (tp99_index >= sorted_latencies.size()) {
-            tp99_index = sorted_latencies.size() - 1;
-        }
-        tp99 = sorted_latencies[tp99_index];
-    };
+// Helper function to calculate latency statistics
+void calc_latency_stats(const std::vector<double>& latencies, double& avg, double& tp99) {
+    if (latencies.empty()) {
+        avg = tp99 = 0.0;
+        return;
+    }
     
-    calc_stats(result.read_latencies_us, result.avg_read_latency_us, result.tp99_read_latency_us);
-    calc_stats(result.write_latencies_us, result.avg_write_latency_us, result.tp99_write_latency_us);
-    calc_stats(result.mixed_latencies_us, result.avg_mixed_latency_us, result.tp99_mixed_latency_us);
+    double sum = 0.0;
+    for (double lat : latencies) {
+        sum += lat;
+    }
+    avg = sum / latencies.size();
+    
+    std::vector<double> sorted_latencies = latencies;
+    std::sort(sorted_latencies.begin(), sorted_latencies.end());
+    size_t tp99_index = static_cast<size_t>(sorted_latencies.size() * 0.99);
+    if (tp99_index >= sorted_latencies.size()) {
+        tp99_index = sorted_latencies.size() - 1;
+    }
+    tp99 = sorted_latencies[tp99_index];
 }
 
-// Test modes
-enum class TestMode {
-    READ_ONLY,
-    WRITE_ONLY,  
-    MIXED_READ_WRITE
+// Calculate statistics from latency vectors
+void calculate_latency_stats(RoundResult& result) {
+    calc_latency_stats(result.read_latencies_us, result.avg_read_latency_us, result.tp99_read_latency_us);
+    calc_latency_stats(result.write_latencies_us, result.avg_write_latency_us, result.tp99_write_latency_us);
+    calc_latency_stats(result.mixed_latencies_us, result.avg_mixed_latency_us, result.tp99_mixed_latency_us);
+}
+
+// Common test initialization
+struct TestContext {
+    MapConfig table_config{"bench_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
+    RoundResult result;
+    std::vector<size_t> test_indices;
 };
+
+TestContext init_test_context(size_t round_number, const BenchConfig& config, const std::string& test_name) {
+    fmt::println("\n=== {} Test Round {} ===", test_name, round_number);
+    
+    TestContext ctx;
+    ctx.result.round_number = round_number;
+    ctx.result.test_kv_count = config.test_kv_pairs;
+    ctx.result.successful_reads = 0;
+    ctx.result.successful_writes = 0;
+    ctx.result.successful_mixed = 0;
+    
+    fmt::println("Generating {} random indices from {} total KV pairs", 
+                 config.test_kv_pairs, config.total_kv_pairs);
+    ctx.test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
+    
+    return ctx;
+}
+
+// Measure operation latency
+template<typename Func>
+double measure_operation_us(Func&& operation) {
+    auto start = std::chrono::high_resolution_clock::now();
+    operation();
+    auto end = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+}
 
 // Perform read-only test
 RoundResult perform_read_test(::mdbx::env_managed& env, size_t round_number, const BenchConfig& config) {
-    fmt::println("\n=== Read Test Round {} ===", round_number);
+    auto ctx = init_test_context(round_number, config, "Read");
     
-    MapConfig table_config{"bench_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
-    RoundResult result;
-    result.round_number = round_number;
-    result.test_kv_count = config.test_kv_pairs;
-    result.successful_reads = 0;
-    
-    // Generate random indices for this round
-    fmt::println("Generating {} random indices from {} total KV pairs", 
-                 config.test_kv_pairs, config.total_kv_pairs);
-    auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
-    
-    // Read the selected KV pairs with individual latency tracking
     fmt::println("Reading {} randomly selected KV pairs", config.test_kv_pairs);
     auto read_start = std::chrono::high_resolution_clock::now();
     
-    result.read_latencies_us.reserve(config.test_kv_pairs);
+    ctx.result.read_latencies_us.reserve(config.test_kv_pairs);
     
     {
         ROTxnManaged ro_txn(env);
-        auto cursor = ro_txn.ro_cursor(table_config);
+        auto cursor = ro_txn.ro_cursor(ctx.table_config);
         
-        for (size_t index : test_indices) {
+        for (size_t index : ctx.test_indices) {
             std::string key = generate_key(index);
             
-            auto op_start = std::chrono::high_resolution_clock::now();
-            auto find_result = cursor->find(str_to_slice(key), false);
-            auto op_end = std::chrono::high_resolution_clock::now();
+            double latency_us = measure_operation_us([&]() {
+                auto find_result = cursor->find(str_to_slice(key), false);
+                if (find_result.done) {
+                    ctx.result.successful_reads++;
+                }
+            });
             
-            if (find_result.done) {
-                result.successful_reads++;
-            }
-            
-            double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                op_end - op_start).count();
-            result.read_latencies_us.push_back(latency_us);
+            ctx.result.read_latencies_us.push_back(latency_us);
         }
         
         ro_txn.abort();
     }
     
     auto read_end = std::chrono::high_resolution_clock::now();
-    result.read_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+    ctx.result.read_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         read_end - read_start).count();
     
-    calculate_latency_stats(result);
+    calculate_latency_stats(ctx.result);
     
-    fmt::println("✓ Read {} KV pairs in {:.2f} ms", result.successful_reads, result.read_time_ms);
-    fmt::println("✓ Average read latency: {:.2f} μs", result.avg_read_latency_us);
-    fmt::println("✓ Tp99 read latency: {:.2f} μs", result.tp99_read_latency_us);
+    fmt::println("✓ Read {} KV pairs in {:.2f} ms", ctx.result.successful_reads, ctx.result.read_time_ms);
+    fmt::println("✓ Average read latency: {:.2f} μs", ctx.result.avg_read_latency_us);
+    fmt::println("✓ Tp99 read latency: {:.2f} μs", ctx.result.tp99_read_latency_us);
     fmt::println("✓ Read throughput: {:.2f} ops/sec", 
-                 static_cast<double>(result.successful_reads) / (result.read_time_ms / 1000.0));
+                 static_cast<double>(ctx.result.successful_reads) / (ctx.result.read_time_ms / 1000.0));
     
-    return result;
+    return ctx.result;
 }
 
 // Perform write-only test
 RoundResult perform_write_test(::mdbx::env_managed& env, size_t round_number, const BenchConfig& config) {
-    fmt::println("\n=== Write Test Round {} ===", round_number);
-    
-    MapConfig table_config{"bench_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
-    RoundResult result;
-    result.round_number = round_number;
-    result.test_kv_count = config.test_kv_pairs;
-    result.successful_writes = 0;
-    
-    // Generate random indices for this round
-    fmt::println("Generating {} random indices from {} total KV pairs", 
-                 config.test_kv_pairs, config.total_kv_pairs);
-    auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
+    auto ctx = init_test_context(round_number, config, "Write");
     
     fmt::println("Writing {} randomly selected KV pairs", config.test_kv_pairs);
     
-    result.write_latencies_us.reserve(config.test_kv_pairs);
+    ctx.result.write_latencies_us.reserve(config.test_kv_pairs);
     
     {
         RWTxnManaged rw_txn(env);
-        auto cursor = rw_txn.rw_cursor(table_config);
+        auto cursor = rw_txn.rw_cursor(ctx.table_config);
         
         auto write_start = std::chrono::high_resolution_clock::now();
         
-        for (size_t i = 0; i < test_indices.size(); ++i) {
-            size_t index = test_indices[i];
+        for (size_t i = 0; i < ctx.test_indices.size(); ++i) {
+            size_t index = ctx.test_indices[i];
             std::string key = generate_key(index);
             std::string new_value = generate_value(index + round_number * 1000000);
             
-            auto op_start = std::chrono::high_resolution_clock::now();
-            cursor->upsert(str_to_slice(key), str_to_slice(new_value));
-            auto op_end = std::chrono::high_resolution_clock::now();
+            double latency_us = measure_operation_us([&]() {
+                cursor->upsert(str_to_slice(key), str_to_slice(new_value));
+                ctx.result.successful_writes++;
+            });
             
-            result.successful_writes++;
-            
-            double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                op_end - op_start).count();
-            result.write_latencies_us.push_back(latency_us);
+            ctx.result.write_latencies_us.push_back(latency_us);
         }
         
         auto write_end = std::chrono::high_resolution_clock::now();
-        result.write_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        ctx.result.write_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             write_end - write_start).count();
         
-        // Measure commit time specifically
-        auto commit_start = std::chrono::high_resolution_clock::now();
-        rw_txn.commit_and_stop();
-        auto commit_end = std::chrono::high_resolution_clock::now();
-        
-        result.commit_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            commit_end - commit_start).count();
+        ctx.result.commit_time_ms = measure_operation_us([&]() {
+            rw_txn.commit_and_stop();
+        }) / 1000.0;
     }
     
-    calculate_latency_stats(result);
+    calculate_latency_stats(ctx.result);
     
-    fmt::println("✓ Wrote {} KV pairs in {:.2f} ms", result.successful_writes, result.write_time_ms);
-    fmt::println("✓ Commit time: {:.2f} ms", result.commit_time_ms);
-    fmt::println("✓ Average write latency: {:.2f} μs", result.avg_write_latency_us);
-    fmt::println("✓ Tp99 write latency: {:.2f} μs", result.tp99_write_latency_us);
+    fmt::println("✓ Wrote {} KV pairs in {:.2f} ms", ctx.result.successful_writes, ctx.result.write_time_ms);
+    fmt::println("✓ Commit time: {:.2f} ms", ctx.result.commit_time_ms);
+    fmt::println("✓ Average write latency: {:.2f} μs", ctx.result.avg_write_latency_us);
+    fmt::println("✓ Tp99 write latency: {:.2f} μs", ctx.result.tp99_write_latency_us);
     fmt::println("✓ Write throughput: {:.2f} ops/sec", 
-                 static_cast<double>(result.successful_writes) / (result.write_time_ms / 1000.0));
+                 static_cast<double>(ctx.result.successful_writes) / (ctx.result.write_time_ms / 1000.0));
     
-    return result;
+    return ctx.result;
 }
 
 // Perform update test (read-then-update pattern like legacy mode)
 RoundResult perform_update_test(::mdbx::env_managed& env, size_t round_number, const BenchConfig& config) {
-    fmt::println("\n=== Update Test Round {} ===", round_number);
+    auto ctx = init_test_context(round_number, config, "Update");
     
-    MapConfig table_config{"bench_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
-    RoundResult result;
-    result.round_number = round_number;
-    result.test_kv_count = config.test_kv_pairs;
-    
-    // Step 1: Generate random indices for this round
-    fmt::println("Generating {} random indices from {} total KV pairs", 
-                 config.test_kv_pairs, config.total_kv_pairs);
-    auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
-    
-    // Step 2: Read the selected KV pairs with individual latency tracking
     fmt::println("Reading {} randomly selected KV pairs", config.test_kv_pairs);
     auto read_start = std::chrono::high_resolution_clock::now();
     
     std::vector<std::pair<std::string, std::string>> read_data;
     read_data.reserve(config.test_kv_pairs);
-    result.read_latencies_us.reserve(config.test_kv_pairs);
+    ctx.result.read_latencies_us.reserve(config.test_kv_pairs);
     
     {
         ROTxnManaged ro_txn(env);
-        auto cursor = ro_txn.ro_cursor(table_config);
+        auto cursor = ro_txn.ro_cursor(ctx.table_config);
         
-        result.successful_reads = 0;
-        for (size_t index : test_indices) {
+        for (size_t index : ctx.test_indices) {
             std::string key = generate_key(index);
             
-            auto op_start = std::chrono::high_resolution_clock::now();
-            auto find_result = cursor->find(str_to_slice(key), false);
-            auto op_end = std::chrono::high_resolution_clock::now();
+            double latency_us = measure_operation_us([&]() {
+                auto find_result = cursor->find(str_to_slice(key), false);
+                if (find_result.done) {
+                    std::string value = std::string(find_result.value.as_string());
+                    read_data.emplace_back(std::move(key), std::move(value));
+                    ctx.result.successful_reads++;
+                }
+            });
             
-            if (find_result.done) {
-                std::string value = std::string(find_result.value.as_string());
-                read_data.emplace_back(std::move(key), std::move(value));
-                result.successful_reads++;
-            }
-            
-            double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                op_end - op_start).count();
-            result.read_latencies_us.push_back(latency_us);
+            ctx.result.read_latencies_us.push_back(latency_us);
         }
         
         ro_txn.abort();
     }
     
     auto read_end = std::chrono::high_resolution_clock::now();
-    result.read_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+    ctx.result.read_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         read_end - read_start).count();
     
-    fmt::println("✓ Read {} KV pairs in {:.2f} ms", result.successful_reads, result.read_time_ms);
+    fmt::println("✓ Read {} KV pairs in {:.2f} ms", ctx.result.successful_reads, ctx.result.read_time_ms);
     
-    // Step 3: Update the read data and commit with individual latency tracking
-    fmt::println("Updating and committing {} KV pairs", result.successful_reads);
+    fmt::println("Updating and committing {} KV pairs", ctx.result.successful_reads);
     
-    result.write_latencies_us.reserve(result.successful_reads);
+    ctx.result.write_latencies_us.reserve(ctx.result.successful_reads);
     
     {
         RWTxnManaged rw_txn(env);
-        auto cursor = rw_txn.rw_cursor(table_config);
+        auto cursor = rw_txn.rw_cursor(ctx.table_config);
         
         auto write_start = std::chrono::high_resolution_clock::now();
         
-        // Update all read data with new values
-        result.successful_writes = 0;
         for (size_t i = 0; i < read_data.size(); ++i) {
             const auto& [key, old_value] = read_data[i];
-            // Generate a new value for update (add round number to make it unique)
             std::string new_value = generate_value(i + round_number * 1000000);
             
-            auto op_start = std::chrono::high_resolution_clock::now();
-            cursor->upsert(str_to_slice(key), str_to_slice(new_value));
-            auto op_end = std::chrono::high_resolution_clock::now();
+            double latency_us = measure_operation_us([&]() {
+                cursor->upsert(str_to_slice(key), str_to_slice(new_value));
+                ctx.result.successful_writes++;
+            });
             
-            result.successful_writes++;
-            
-            double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                op_end - op_start).count();
-            result.write_latencies_us.push_back(latency_us);
+            ctx.result.write_latencies_us.push_back(latency_us);
         }
         
         auto write_end = std::chrono::high_resolution_clock::now();
-        result.write_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        ctx.result.write_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             write_end - write_start).count();
         
-        // Measure commit time specifically
-        auto commit_start = std::chrono::high_resolution_clock::now();
-        rw_txn.commit_and_stop();
-        auto commit_end = std::chrono::high_resolution_clock::now();
-        
-        result.commit_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            commit_end - commit_start).count();
+        ctx.result.commit_time_ms = measure_operation_us([&]() {
+            rw_txn.commit_and_stop();
+        }) / 1000.0;
     }
     
-    // Calculate mixed metrics as combination of read and write
-    result.successful_mixed = result.successful_reads + result.successful_writes;
-    result.mixed_time_ms = result.read_time_ms + result.write_time_ms;
+    // Calculate mixed metrics
+    ctx.result.successful_mixed = ctx.result.successful_reads + ctx.result.successful_writes;
+    ctx.result.mixed_time_ms = ctx.result.read_time_ms + ctx.result.write_time_ms;
     
-    // Combine read and write latencies for mixed latency stats
-    result.mixed_latencies_us.reserve(result.read_latencies_us.size() + result.write_latencies_us.size());
-    result.mixed_latencies_us.insert(result.mixed_latencies_us.end(), 
-                                   result.read_latencies_us.begin(), result.read_latencies_us.end());
-    result.mixed_latencies_us.insert(result.mixed_latencies_us.end(), 
-                                   result.write_latencies_us.begin(), result.write_latencies_us.end());
+    // Combine read and write latencies
+    ctx.result.mixed_latencies_us.reserve(ctx.result.read_latencies_us.size() + ctx.result.write_latencies_us.size());
+    ctx.result.mixed_latencies_us.insert(ctx.result.mixed_latencies_us.end(), 
+                                   ctx.result.read_latencies_us.begin(), ctx.result.read_latencies_us.end());
+    ctx.result.mixed_latencies_us.insert(ctx.result.mixed_latencies_us.end(), 
+                                   ctx.result.write_latencies_us.begin(), ctx.result.write_latencies_us.end());
     
-    calculate_latency_stats(result);
+    calculate_latency_stats(ctx.result);
     
-    fmt::println("✓ Updated and committed {} KV pairs", result.successful_writes);
+    fmt::println("✓ Updated and committed {} KV pairs", ctx.result.successful_writes);
     fmt::println("✓ Total mixed operations: {} (read: {}, write: {})", 
-                 result.successful_mixed, result.successful_reads, result.successful_writes);
-    fmt::println("✓ Read time: {:.2f} ms, Write time: {:.2f} ms", result.read_time_ms, result.write_time_ms);
-    fmt::println("✓ Commit time: {:.2f} ms", result.commit_time_ms);
-    fmt::println("✓ Average read latency: {:.2f} μs", result.avg_read_latency_us);
-    fmt::println("✓ Average write latency: {:.2f} μs", result.avg_write_latency_us);
-    fmt::println("✓ Average mixed latency: {:.2f} μs", result.avg_mixed_latency_us);
-    fmt::println("✓ Tp99 mixed latency: {:.2f} μs", result.tp99_mixed_latency_us);
+                 ctx.result.successful_mixed, ctx.result.successful_reads, ctx.result.successful_writes);
+    fmt::println("✓ Read time: {:.2f} ms, Write time: {:.2f} ms", ctx.result.read_time_ms, ctx.result.write_time_ms);
+    fmt::println("✓ Commit time: {:.2f} ms", ctx.result.commit_time_ms);
+    fmt::println("✓ Average read latency: {:.2f} μs", ctx.result.avg_read_latency_us);
+    fmt::println("✓ Average write latency: {:.2f} μs", ctx.result.avg_write_latency_us);
+    fmt::println("✓ Average mixed latency: {:.2f} μs", ctx.result.avg_mixed_latency_us);
+    fmt::println("✓ Tp99 mixed latency: {:.2f} μs", ctx.result.tp99_mixed_latency_us);
     fmt::println("✓ Mixed throughput: {:.2f} ops/sec", 
-                 static_cast<double>(result.successful_mixed) / (result.mixed_time_ms / 1000.0));
+                 static_cast<double>(ctx.result.successful_mixed) / (ctx.result.mixed_time_ms / 1000.0));
     
-    return result;
+    return ctx.result;
 }
 
 // Perform mixed read-write test with 80:20 ratio
 RoundResult perform_mixed_test(::mdbx::env_managed& env, size_t round_number, const BenchConfig& config) {
-    fmt::println("\n=== Mixed Read-Write Test Round {} ===", round_number);
+    auto ctx = init_test_context(round_number, config, "Mixed Read-Write");
     
-    MapConfig table_config{"bench_table", ::mdbx::key_mode::usual, ::mdbx::value_mode::single};
-    RoundResult result;
-    result.round_number = round_number;
-    result.test_kv_count = config.test_kv_pairs;
-    result.successful_reads = 0;
-    result.successful_writes = 0;
-    result.successful_mixed = 0;
-    
-    // Generate random indices for this round
-    fmt::println("Generating {} mixed operations from {} total KV pairs", 
+    fmt::println("Performing {} mixed operations from {} total KV pairs", 
                  config.test_kv_pairs, config.total_kv_pairs);
-    auto test_indices = generate_random_indices(config.test_kv_pairs, config.total_kv_pairs);
     
     // Calculate 8:2 ratio (every 8 reads followed by 2 writes)
     size_t batch_size = 10; // 8 reads + 2 writes = 10 operations per batch
@@ -637,135 +590,115 @@ RoundResult perform_mixed_test(::mdbx::env_managed& env, size_t round_number, co
     
     fmt::println("Mixed operations: {} reads, {} writes (8:2 pattern)", read_count, write_count);
     
-    result.read_latencies_us.reserve(read_count);
-    result.write_latencies_us.reserve(write_count);
+    ctx.result.read_latencies_us.reserve(read_count);
+    ctx.result.write_latencies_us.reserve(write_count);
     
     auto test_start = std::chrono::high_resolution_clock::now();
     
     {
         // Use read-write transaction for mixed operations
         RWTxnManaged rw_txn(env);
-        auto cursor = rw_txn.rw_cursor(table_config);
+        auto cursor = rw_txn.rw_cursor(ctx.table_config);
         
         // Perform mixed operations with 8:2 pattern
         size_t op_index = 0;
         for (size_t batch = 0; batch < num_batches; ++batch) {
             // 8 reads in this batch
             for (int read_in_batch = 0; read_in_batch < 8 && op_index < config.test_kv_pairs; ++read_in_batch) {
-                size_t index = test_indices[op_index];
+                size_t index = ctx.test_indices[op_index];
                 std::string key = generate_key(index);
                 
-                auto op_start = std::chrono::high_resolution_clock::now();
-                auto find_result = cursor->find(str_to_slice(key), false);
-                auto op_end = std::chrono::high_resolution_clock::now();
+                double latency_us = measure_operation_us([&]() {
+                    auto find_result = cursor->find(str_to_slice(key), false);
+                    if (find_result.done) {
+                        ctx.result.successful_reads++;
+                    }
+                });
                 
-                if (find_result.done) {
-                    result.successful_reads++;
-                }
-                
-                double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    op_end - op_start).count();
-                result.read_latencies_us.push_back(latency_us);
-                
+                ctx.result.read_latencies_us.push_back(latency_us);
                 op_index++;
             }
             
             // 2 writes in this batch
             for (int write_in_batch = 0; write_in_batch < 2 && op_index < config.test_kv_pairs; ++write_in_batch) {
-                size_t index = test_indices[op_index];
+                size_t index = ctx.test_indices[op_index];
                 std::string key = generate_key(index);
                 std::string new_value = generate_value(index + round_number * 1000000);
                 
-                auto op_start = std::chrono::high_resolution_clock::now();
-                cursor->upsert(str_to_slice(key), str_to_slice(new_value));
-                auto op_end = std::chrono::high_resolution_clock::now();
+                double latency_us = measure_operation_us([&]() {
+                    cursor->upsert(str_to_slice(key), str_to_slice(new_value));
+                    ctx.result.successful_writes++;
+                });
                 
-                result.successful_writes++;
-                
-                double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    op_end - op_start).count();
-                result.write_latencies_us.push_back(latency_us);
-                
+                ctx.result.write_latencies_us.push_back(latency_us);
                 op_index++;
             }
         }
         
         // Handle remaining operations (if any)
         while (op_index < config.test_kv_pairs) {
-            size_t index = test_indices[op_index];
+            size_t index = ctx.test_indices[op_index];
             std::string key = generate_key(index);
             
             if (op_index % batch_size < 8) {
                 // Read operation
-                auto op_start = std::chrono::high_resolution_clock::now();
-                auto find_result = cursor->find(str_to_slice(key), false);
-                auto op_end = std::chrono::high_resolution_clock::now();
-                
-                if (find_result.done) {
-                    result.successful_reads++;
-                }
-                
-                double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    op_end - op_start).count();
-                result.read_latencies_us.push_back(latency_us);
+                double latency_us = measure_operation_us([&]() {
+                    auto find_result = cursor->find(str_to_slice(key), false);
+                    if (find_result.done) {
+                        ctx.result.successful_reads++;
+                    }
+                });
+                ctx.result.read_latencies_us.push_back(latency_us);
             } else {
                 // Write operation
                 std::string new_value = generate_value(index + round_number * 1000000);
                 
-                auto op_start = std::chrono::high_resolution_clock::now();
-                cursor->upsert(str_to_slice(key), str_to_slice(new_value));
-                auto op_end = std::chrono::high_resolution_clock::now();
-                
-                result.successful_writes++;
-                
-                double latency_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                    op_end - op_start).count();
-                result.write_latencies_us.push_back(latency_us);
+                double latency_us = measure_operation_us([&]() {
+                    cursor->upsert(str_to_slice(key), str_to_slice(new_value));
+                    ctx.result.successful_writes++;
+                });
+                ctx.result.write_latencies_us.push_back(latency_us);
             }
             
             op_index++;
         }
         
-        // Measure commit time
-        auto commit_start = std::chrono::high_resolution_clock::now();
-        rw_txn.commit_and_stop();
-        auto commit_end = std::chrono::high_resolution_clock::now();
-        
-        result.commit_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            commit_end - commit_start).count();
+        ctx.result.commit_time_ms = measure_operation_us([&]() {
+            rw_txn.commit_and_stop();
+        }) / 1000.0;
     }
     
     auto test_end = std::chrono::high_resolution_clock::now();
-    result.mixed_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+    ctx.result.mixed_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         test_end - test_start).count();
     
     // Calculate separate read and write times
-    result.read_time_ms = 0; // Individual read timing not tracked in mixed mode
-    result.write_time_ms = 0; // Individual write timing not tracked in mixed mode
+    ctx.result.read_time_ms = 0; // Individual read timing not tracked in mixed mode
+    ctx.result.write_time_ms = 0; // Individual write timing not tracked in mixed mode
     
-    result.successful_mixed = result.successful_reads + result.successful_writes;
+    ctx.result.successful_mixed = ctx.result.successful_reads + ctx.result.successful_writes;
     
     // Combine read and write latencies for mixed latency stats
-    result.mixed_latencies_us.reserve(result.read_latencies_us.size() + result.write_latencies_us.size());
-    result.mixed_latencies_us.insert(result.mixed_latencies_us.end(), 
-                                   result.read_latencies_us.begin(), result.read_latencies_us.end());
-    result.mixed_latencies_us.insert(result.mixed_latencies_us.end(), 
-                                   result.write_latencies_us.begin(), result.write_latencies_us.end());
+    ctx.result.mixed_latencies_us.reserve(ctx.result.read_latencies_us.size() + ctx.result.write_latencies_us.size());
+    ctx.result.mixed_latencies_us.insert(ctx.result.mixed_latencies_us.end(), 
+                                   ctx.result.read_latencies_us.begin(), ctx.result.read_latencies_us.end());
+    ctx.result.mixed_latencies_us.insert(ctx.result.mixed_latencies_us.end(), 
+                                   ctx.result.write_latencies_us.begin(), ctx.result.write_latencies_us.end());
     
-    calculate_latency_stats(result);
+    calculate_latency_stats(ctx.result);
     
     fmt::println("✓ Completed {} mixed operations (reads: {}, writes: {})", 
-                 result.successful_mixed, result.successful_reads, result.successful_writes);
-    fmt::println("✓ Total mixed time: {:.2f} ms", result.mixed_time_ms);
-    fmt::println("✓ Commit time: {:.2f} ms", result.commit_time_ms);
-    fmt::println("✓ Average read latency: {:.2f} μs", result.avg_read_latency_us);
-    fmt::println("✓ Average write latency: {:.2f} μs", result.avg_write_latency_us);
-    fmt::println("✓ Average mixed latency: {:.2f} μs", result.avg_mixed_latency_us);
-    fmt::println("✓ Tp99 mixed latency: {:.2f} μs", result.tp99_mixed_latency_us);
+                 ctx.result.successful_mixed, ctx.result.successful_reads, ctx.result.successful_writes);
+    fmt::println("✓ Total mixed time: {:.2f} ms", ctx.result.mixed_time_ms);
+    fmt::println("✓ Commit time: {:.2f} ms", ctx.result.commit_time_ms);
+    fmt::println("✓ Average read latency: {:.2f} μs", ctx.result.avg_read_latency_us);
+    fmt::println("✓ Average write latency: {:.2f} μs", ctx.result.avg_write_latency_us);
+    fmt::println("✓ Average mixed latency: {:.2f} μs", ctx.result.avg_mixed_latency_us);
+    fmt::println("✓ Tp99 mixed latency: {:.2f} μs", ctx.result.tp99_mixed_latency_us);
     fmt::println("✓ Mixed throughput: {:.2f} ops/sec", 
-                 static_cast<double>(result.successful_mixed) / (result.mixed_time_ms / 1000.0));
+                 static_cast<double>(ctx.result.successful_mixed) / (ctx.result.mixed_time_ms / 1000.0));
     
-    return result;
+    return ctx.result;
 }
 
 // Run comprehensive benchmark with all test modes
